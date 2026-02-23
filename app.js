@@ -1,5 +1,4 @@
 import { Store } from "./js/store.js";
-import { ApiClient } from "./js/api/client.js";
 import { createRouter } from "./js/utils/router.js";
 import { createPoller } from "./js/utils/poller.js";
 import { qs } from "./js/utils/dom.js";
@@ -12,24 +11,22 @@ import { bindGlobalSearch } from "./js/components/SearchBar.js";
 import { applyTableFilter } from "./js/components/TableFilters.js";
 import { patchActiveRow } from "./js/components/ActiveRowPatcher.js";
 
+import { LoginPage } from "./js/pages/LoginPage.js";
 import { InventoryPage } from "./js/pages/InventoryPage.js";
 import { ActiveResourcesPage } from "./js/pages/ActiveResourcesPage.js";
 import { TimePoliciesPage } from "./js/pages/TimePoliciesPage.js";
-import { SettingsPage } from "./js/pages/SettingsPage.js";
+import { SleepPlansPage } from "./js/pages/SleepPlansPage.js";
 
 import * as Api from "./js/api/services.js";
 
 /* ---------- Bootstrapping shell ---------- */
 (function bootstrapShell(){
-  // sidebar
   const rail = qs("#ds-rail");
   if (rail) rail.innerHTML = renderSidebar();
 
-  // header
   const topbar = qs("#ds-topbar");
   if (topbar) topbar.innerHTML = renderHeader();
 
-  // bind header behaviors
   bindUserDropdown();
   renderUserInfo();
 
@@ -39,34 +36,49 @@ import * as Api from "./js/api/services.js";
     if (route === "active") applyTableFilter('[data-table="active"]', q);
   });
 
-  // API indicator
-  ApiClient.setBaseUrl(localStorage.getItem("deepsleep.baseUrl") || "");
+  // API indicator is internal now
   const apiIndicator = qs("#ds-api-indicator");
-  if (apiIndicator) apiIndicator.textContent = ApiClient.getBaseUrl() || "—";
+  if (apiIndicator) apiIndicator.textContent = "same-origin";
 })();
 
 /* ---------- Router ---------- */
 const router = createRouter();
 
+router.register("login", async () => LoginPage());
 router.register("discovery", async () => InventoryPage());
 router.register("active", async () => ActiveResourcesPage());
 router.register("policies", async () => TimePoliciesPage());
-router.register("settings", async () => SettingsPage());
+router.register("settings", async () => SleepPlansPage());
 
-router.start((route) => {
+function initialRoute(route) {
+  const s = Store.getState();
+  const hasToken = !!s.auth.token;
+
+  // Landing: if not logged in -> /login
+  if (!hasToken && route.name !== "login") {
+    location.hash = "#/login";
+    return;
+  }
+
+  // If logged in and user hits /login, redirect to discovery
+  if (hasToken && route.name === "login") {
+    location.hash = "#/discovery";
+    return;
+  }
+
   Store.setState({ route });
-
   setActiveNav(route.name);
   router.render(route);
 
-  // keep search input in sync (do not change behavior, just reflect state)
+  // keep search input in sync
   const input = qs("#ds-global-search");
   if (input) input.value = Store.getState().ui.search || "";
-});
+}
+
+router.start((route) => initialRoute(route));
 
 /* ---------- Polling (10s) ----------
-   Requirement: fetch /accounts/{id}/cluster-states and update only concerned rows.
-   (We also patch RDS states for consistency, same as previous SPA behavior.)
+   Fetch /accounts/{id}/cluster-states and patch only changed rows.
 */
 const poller = createPoller({
   intervalMs: 10_000,

@@ -1,7 +1,7 @@
 import { Storage } from "./utils/storage.js";
 
 const state = {
-  route: { name: "discovery", params: {} },
+  route: { name: "login", params: {} },
 
   ui: { search: "" },
 
@@ -13,8 +13,9 @@ const state = {
   },
 
   account: {
+    // internal; we try to derive from JWT payload on login
     id: Number(Storage.get("deepsleep.account_id", "0") || 0) || 0,
-    aws_account_id: Storage.get("deepsleep.aws_account_id", ""),
+    aws_account_id: Storage.get("deepsleep.aws_account_id", ""), // display only, currently unknown
     name: Storage.get("deepsleep.account_name", "—"),
   },
 
@@ -33,10 +34,16 @@ const state = {
     plans: { EKS_CLUSTER: "dev", RDS_INSTANCE: "rds_dev" },
   },
 
+  sleepPlans: {
+    // loaded from /accounts/{id}/config
+    config: { sleep_plans: {} },
+    names: [], // convenience cache
+    loading: false,
+  },
+
   policies: {
     list: [],
     selectedId: null,
-    editor: null,
     loading: false,
   },
 };

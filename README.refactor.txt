@@ -1,20 +1,18 @@
-DeepSleep Vanilla SPA Refactor (no behavior changes)
+DeepSleep Vanilla SPA (no framework) — Updated UX
 
-Entry:
-- index.html includes CSS and app.js (module)
-- app.js renders Sidebar+Header into placeholders and routes pages.
+Key changes:
+- /login route is the landing page when not authenticated.
+- Logout redirects to /login.
+- Top-right user dropdown displays:
+  - Email
+  - Business ID
+  - AWS Account (currently unknown => blank/—)
+- "Sleep Plans" tab (route: /settings) is the UI editor for account sleep plans:
+  - GET /accounts/{account_id}/config
+  - PUT /accounts/{account_id}/config
+- "Time Policies" tab is a full UI editor (no JSON), including window editor + plan_name_by_type.
 
-Structure:
-- css/main.css variables+reset+shared atoms
-- css/sidebar.css, css/header.css, css/inventory.css module CSS
-
-- js/store.js Pub/Sub-like Store (getState/setState/subscribe)
-- js/api/client.js base URL + auth + request()
-- js/api/services.js typed endpoints
-
-- js/components/* pure render/bind helpers
-- js/pages/* per-route page logic
-- js/utils/* dom/time/storage/toast/router/poller
-
-Run:
-- Serve with any static server (e.g. python -m http.server) and set API Base URL in Settings.
+Notes:
+- API base URL is same-origin (internal), not user-configurable.
+- account_id is internal; UI does not ask for it. Frontend attempts to infer it from JWT claims on login.
+  If your JWT does not include it, set it server-side or add a lightweight "me" endpoint.

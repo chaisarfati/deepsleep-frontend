@@ -4,6 +4,13 @@ import { request } from "./client.js";
 export const login = (payload) => request("/auth/login", { method: "POST", body: payload });
 export const refresh = (payload) => request("/auth/refresh", { method: "POST", body: payload });
 
+/* Account Config (Sleep Plans) */
+export const getAccountConfig = (accountId) =>
+  request(`/accounts/${accountId}/config`);
+
+export const putAccountConfig = (accountId, body) =>
+  request(`/accounts/${accountId}/config`, { method: "PUT", body });
+
 /* Resources */
 export const searchResources = (accountId, body) =>
   request(`/accounts/${accountId}/resources/search`, { method: "POST", body });

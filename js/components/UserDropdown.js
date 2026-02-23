@@ -27,11 +27,12 @@ export function bindUserDropdown() {
   if (logout) {
     logout.addEventListener("click", () => {
       Storage.del("deepsleep.token");
+      // keep email/business_id for chip? product wants landing to login; keep minimal
       Store.setState({ auth: { token: "" } });
-      toast("Session", "Token cleared. You can re-login in Settings.");
+      toast("Session", "Logged out.");
       userchip.setAttribute("aria-expanded", "false");
       dropdown.hidden = true;
-      location.hash = "#/settings";
+      location.hash = "#/login";
     });
   }
 }
@@ -47,6 +48,8 @@ export function renderUserInfo() {
 
   if (chipText) chipText.textContent = email;
   if (ddName) ddName.textContent = email;
+
+  // AWS account display: allowed to be empty for now
   if (ddAws) ddAws.textContent = s.account.aws_account_id || "—";
   if (ddBiz) ddBiz.textContent = s.auth.business_id || "—";
 }

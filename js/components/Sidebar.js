@@ -50,7 +50,7 @@ export function renderSidebar() {
             <path d="M3 9l1.6-.6.2-1.8L3.7 5.3 5.3 3.7l1.3 1.1 1.8-.2L9 3l.6 1.6 1.8.2 1.3-1.1 1.6 1.6-1.1 1.3.2 1.8L15 9l-1.6.6-.2 1.8 1.1 1.3-1.6 1.6-1.3-1.1-1.8.2L9 15l-.6-1.6-1.8-.2-1.3 1.1-1.6-1.6 1.1-1.3-.2-1.8L3 9Z" fill="none" stroke="currentColor" stroke-width="1.3"/>
           </svg>
         </span>
-        <span class="ds-navlink__label">Settings</span>
+        <span class="ds-navlink__label">Sleep Plans</span>
       </a>
     </nav>
 
@@ -61,7 +61,7 @@ export function renderSidebar() {
       </div>
       <div class="ds-foot__hint">
         <span class="ds-hint__label">API:</span>
-        <span class="ds-hint__value" id="ds-api-indicator">—</span>
+        <span class="ds-hint__value" id="ds-api-indicator">same-origin</span>
       </div>
     </div>
   `;

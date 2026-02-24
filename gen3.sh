@@ -1,3 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${1:-.}"
+
+# ------------------------------------------------------------
+# 1) Fix modal visibility (Sleep Plans editor dialog not fully visible)
+#    => make modal body scrollable + constrain height
+#    Patch: css/main.css
+# ------------------------------------------------------------
+CSS_FILE="$ROOT/css/main.css"
+if [[ ! -f "$CSS_FILE" ]]; then
+  echo "ERROR: $CSS_FILE not found. Run the previous refactor generator first."
+  exit 1
+fi
+
+# Replace the existing .ds-modal / .ds-modal__body blocks (if present) with scroll-safe versions.
+# If not found, append the blocks at end.
+perl -0777 -i -pe '
+  my $modal_new = qq{
+.ds-modal{
+  position:absolute;
+  top:8vh;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(760px, calc(100vw - 32px));
+  max-height:84vh;                 /* NEW: constrain */
+  border:var(--ds-border);
+  background:var(--ds-surface);
+  box-shadow:var(--ds-hard-shadow);
+  pointer-events:auto;
+  display:flex;                    /* NEW: allow body to flex */
+  flex-direction:column;           /* NEW */
+}
+.ds-modal__head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:12px;
+  border-bottom:var(--ds-border);
+  background:var(--ds-bg);
+  flex:0 0 auto;                   /* NEW */
+}
+.ds-modal__title{ font-weight:900; }
+.ds-modal__body{
+  padding:12px;
+  overflow:auto;                   /* NEW: scroll inside modal */
+  flex:1 1 auto;                   /* NEW */
+}
+.ds-modal__foot{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  padding:12px;
+  border-top:var(--ds-border);
+  background:var(--ds-bg);
+  flex:0 0 auto;                   /* NEW */
+}
+};
+
+  if ($_ =~ /\.ds-modal\{/s && $_ =~ /\.ds-modal__body\{/s) {
+    # Replace whole ds-modal block group by removing old ds-modal..ds-modal__foot definitions
+    $_ =~ s/\.ds-modal\{.*?\}\s*\.ds-modal__head\{.*?\}\s*\.ds-modal__title\{.*?\}\s*\.ds-modal__body\{.*?\}\s*\.ds-modal__foot\{.*?\}\s*/$modal_new/s;
+  } else {
+    $_ .= "\n/* --- Modal scroll safety (patch) --- */\n$modal_new\n";
+  }
+  $_;
+' "$CSS_FILE"
+
+# ------------------------------------------------------------
+# 2) Time Policies: add selector_by_type UI + wiring
+#    Patch: js/pages/TimePoliciesPage.js
+# ------------------------------------------------------------
+TP_FILE="$ROOT/js/pages/TimePoliciesPage.js"
+if [[ ! -f "$TP_FILE" ]]; then
+  echo "ERROR: $TP_FILE not found."
+  exit 1
+fi
+
+cat > "$TP_FILE" <<'EOF'
 import { Store } from "../store.js";
 import { toast, confirmModal } from "../utils/toast.js";
 import { qs, qsa, escapeHtml as h } from "../utils/dom.js";
@@ -789,3 +869,8 @@ export async function TimePoliciesPage() {
   renderWindows();
   await loadList();
 }
+EOF
+
+echo "OK: patched modal scroll behavior in css/main.css"
+echo "OK: patched TimePolicies selector_by_type UI in js/pages/TimePoliciesPage.js"
+echo "Done."

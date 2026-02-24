@@ -211,16 +211,20 @@ button{ cursor:pointer; background:transparent; border:none; }
   background:rgba(0,0,0,.22);
   pointer-events:auto;
 }
+
 .ds-modal{
   position:absolute;
-  top:10vh;
+  top:8vh;
   left:50%;
   transform:translateX(-50%);
   width:min(760px, calc(100vw - 32px));
+  max-height:84vh;                 /* NEW: constrain */
   border:var(--ds-border);
   background:var(--ds-surface);
   box-shadow:var(--ds-hard-shadow);
   pointer-events:auto;
+  display:flex;                    /* NEW: allow body to flex */
+  flex-direction:column;           /* NEW */
 }
 .ds-modal__head{
   display:flex;
@@ -229,9 +233,14 @@ button{ cursor:pointer; background:transparent; border:none; }
   padding:12px;
   border-bottom:var(--ds-border);
   background:var(--ds-bg);
+  flex:0 0 auto;                   /* NEW */
 }
 .ds-modal__title{ font-weight:900; }
-.ds-modal__body{ padding:12px; }
+.ds-modal__body{
+  padding:12px;
+  overflow:auto;                   /* NEW: scroll inside modal */
+  flex:1 1 auto;                   /* NEW */
+}
 .ds-modal__foot{
   display:flex;
   justify-content:flex-end;
@@ -239,8 +248,8 @@ button{ cursor:pointer; background:transparent; border:none; }
   padding:12px;
   border-top:var(--ds-border);
   background:var(--ds-bg);
+  flex:0 0 auto;                   /* NEW */
 }
-
 /* Responsive */
 @media (max-width: 960px){
   .ds-shell{ grid-template-columns: 1fr; }

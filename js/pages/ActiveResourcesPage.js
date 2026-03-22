@@ -1,46 +1,92 @@
 import { Store } from "../store.js";
-import { Storage } from "../utils/storage.js";
 import { toast, confirmModal } from "../utils/toast.js";
-import { qs, qsa } from "../utils/dom.js";
+import { qs, qsa, escapeHtml as h } from "../utils/dom.js";
 import { renderPanel } from "../components/Panel.js";
 import { applyTableFilter } from "../components/TableFilters.js";
 import { renderActiveRow } from "../components/ResourceRow.js";
 import * as Api from "../api/services.js";
+
+function sleepPlanTypeForResource(resourceType) {
+  if (resourceType === "EKS_CLUSTER") return "EKS_CLUSTER_SLEEP";
+  if (resourceType === "RDS_INSTANCE") return "RDS_SLEEP";
+  return null;
+}
+
+async function choosePlanForSleep(resourceType) {
+  const accountId = Store.getState().account.id;
+  const config = await Api.getAccountConfig(accountId);
+  const wantedPlanType = sleepPlanTypeForResource(resourceType);
+
+  const plans = Object.entries(config?.sleep_plans || {})
+    .filter(([, plan]) => plan?.plan_type === wantedPlanType)
+    .map(([name]) => name);
+
+  if (!plans.length) {
+    throw new Error(`No available ${wantedPlanType} sleep plan found for this account.`);
+  }
+
+  const host = qs("#ds-modalhost");
+  if (!host) throw new Error("Modal host not found.");
+
+  return new Promise((resolve) => {
+    host.innerHTML = `
+      <div class="ds-modalbackdrop" data-backdrop="1"></div>
+      <div class="ds-modal" role="dialog" aria-modal="true" aria-label="Choose Sleep Plan">
+        <div class="ds-modal__head">
+          <div class="ds-modal__title">Choose Sleep Plan</div>
+          <button class="ds-btn ds-btn--ghost" type="button" data-close="1">Close</button>
+        </div>
+        <div class="ds-modal__body">
+          <div class="ds-field" style="min-width:unset;">
+            <div class="ds-label">Available plans for ${h(resourceType)}</div>
+            <select class="ds-select" id="ds-sleep-plan-select">
+              ${plans.map((name) => `<option value="${h(name)}">${h(name)}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="ds-modal__foot">
+          <button class="ds-btn ds-btn--ghost" type="button" data-cancel="1">Cancel</button>
+          <button class="ds-btn ds-btn--sleep" type="button" data-confirm="1">Sleep</button>
+        </div>
+      </div>
+    `;
+    host.style.pointerEvents = "auto";
+
+    const cleanup = (value) => {
+      host.innerHTML = "";
+      host.style.pointerEvents = "none";
+      resolve(value);
+    };
+
+    host.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t?.dataset?.backdrop || t?.dataset?.close || t?.dataset?.cancel) cleanup(null);
+      if (t?.dataset?.confirm) {
+        const selected = qs("#ds-sleep-plan-select")?.value || null;
+        cleanup(selected);
+      }
+    }, { once: true });
+  });
+}
 
 export async function ActiveResourcesPage() {
   const s = Store.getState();
   const page = qs("#ds-page");
   if (!page) return;
 
-  // Do not hard-block: allow manual account id entry (same fix as Inventory)
+  if (!s.account.id) {
+    toast("Account", "Choose an account from Switch Account first.");
+    location.hash = "#/discovery";
+    return;
+  }
+
   qs("#ds-crumbs").textContent = "Active Resources / Control Panel";
 
   page.innerHTML = renderPanel({
     title: "Control Panel",
     sub: "Registered resources with one-click Sleep/Wake/Unregister. Polls every 10 seconds and patches only changed rows.",
-    actionsHtml: `
-      <span class="ds-badge ds-badge--reg">Registered</span>
-      <span class="ds-badge">Wake: blue</span>
-      <span class="ds-badge">Sleep: brick</span>
-      <span class="ds-badge">Unregister: danger</span>
-    `,
     bodyHtml: `
       <div class="ds-row" style="margin-bottom:12px;">
-        <div class="ds-field">
-          <div class="ds-label">Account ID</div>
-          <input class="ds-input" id="ds-cp-account" inputmode="numeric" value="${s.account.id || ""}" placeholder="(internal)" />
-        </div>
-
-        <div class="ds-field">
-          <div class="ds-label">EKS plan_name</div>
-          <input class="ds-input" id="ds-cp-plan-eks" value="${s.active.plans.EKS_CLUSTER || "dev"}" />
-        </div>
-
-        <div class="ds-field">
-          <div class="ds-label">RDS plan_name</div>
-          <input class="ds-input" id="ds-cp-plan-rds" value="${s.active.plans.RDS_INSTANCE || "rds_dev"}" />
-        </div>
-
         <div class="ds-row" style="margin-left:auto;">
           <button class="ds-btn" id="ds-cp-refresh" type="button">Refresh Now</button>
         </div>
@@ -70,36 +116,10 @@ export async function ActiveResourcesPage() {
   });
 
   const status = qs("#ds-cp-status");
-  const inpAccount = qs("#ds-cp-account");
-  const inpPlanEks = qs("#ds-cp-plan-eks");
-  const inpPlanRds = qs("#ds-cp-plan-rds");
   const btnRefresh = qs("#ds-cp-refresh");
 
-  // keep store in sync (optional but prevents other pages seeing empty account.id)
-  inpAccount?.addEventListener("input", () => {
-    Store.setState({ account: { ...Store.getState().account, id: (inpAccount.value || "").trim() } });
-  });
-
-  function persistControlInputs() {
-    const eksPlan = inpPlanEks.value.trim() || "dev";
-    const rdsPlan = inpPlanRds.value.trim() || "rds_dev";
-    Store.setState({ active: { plans: { EKS_CLUSTER: eksPlan, RDS_INSTANCE: rdsPlan } } });
-  }
-
-  function getAccountId() {
-    const fromInput = (qs("#ds-cp-account")?.value || "").trim();
-    return fromInput || Store.getState().account.id;
-  }
-
   async function loadActiveInitial() {
-    persistControlInputs();
-    const accountId = getAccountId();
-    if (!accountId) {
-      status.textContent = "Missing account_id.";
-      toast("Setup", "Missing account_id. Backend should provide it in token claims.");
-      location.hash = "#/login";
-      return;
-    }
+    const accountId = Store.getState().account.id;
 
     status.textContent = "Loading…";
     try {
@@ -167,32 +187,25 @@ export async function ActiveResourcesPage() {
   function bindActiveRowActions() {
     qsa('[data-action="sleep"], [data-action="wake"], [data-action="unregister"]').forEach((btn) => {
       btn.addEventListener("click", async () => {
-        persistControlInputs();
-        const accountId = getAccountId();
-        if (!accountId) {
-          toast("Setup", "Missing account_id.");
-          location.hash = "#/login";
-          return;
-        }
-
+        const accountId = Store.getState().account.id;
         const key = btn.dataset.key;
         const row = Store.getState().active.rowsByKey.get(key);
         if (!row) return;
 
         const action = btn.dataset.action;
 
-        const ok = await confirmModal({
-          title: `${action.toUpperCase()} ${row.resource_type}`,
-          body: `<div class="ds-mono-muted">${row.resource_name} • ${row.region}</div>`,
-          confirmText: action === "sleep" ? "Sleep" : (action === "wake" ? "Wake" : "Unregister"),
-          cancelText: "Cancel",
-        });
-        if (!ok) return;
-
         try {
           btn.disabled = true;
 
           if (action === "unregister") {
+            const ok = await confirmModal({
+              title: `UNREGISTER ${row.resource_type}`,
+              body: `<div class="ds-mono-muted">${row.resource_name} • ${row.region}</div>`,
+              confirmText: "Unregister",
+              cancelText: "Cancel",
+            });
+            if (!ok) return;
+
             if (row.resource_type === "EKS_CLUSTER") {
               await Api.unregisterEKS(accountId, row.resource_name, row.region);
             } else if (row.resource_type === "RDS_INSTANCE") {
@@ -204,15 +217,35 @@ export async function ActiveResourcesPage() {
             return;
           }
 
-          if (row.resource_type === "EKS_CLUSTER") {
-            if (action === "sleep") await Api.sleepEKS(accountId, row.resource_name, row.region, Store.getState().active.plans.EKS_CLUSTER);
-            else await Api.wakeEKS(accountId, row.resource_name, row.region);
-          } else if (row.resource_type === "RDS_INSTANCE") {
-            if (action === "sleep") await Api.sleepRDS(accountId, row.resource_name, row.region, Store.getState().active.plans.RDS_INSTANCE);
-            else await Api.wakeRDS(accountId, row.resource_name, row.region);
+          if (action === "sleep") {
+            const selectedPlan = await choosePlanForSleep(row.resource_type);
+            if (!selectedPlan) return;
+
+            if (row.resource_type === "EKS_CLUSTER") {
+              await Api.sleepEKS(accountId, row.resource_name, row.region, selectedPlan);
+            } else if (row.resource_type === "RDS_INSTANCE") {
+              await Api.sleepRDS(accountId, row.resource_name, row.region, selectedPlan);
+            }
+            toast("Orchestrator", `Sleep submitted with plan ${selectedPlan}.`);
+            return;
           }
 
-          toast("Orchestrator", "Run submitted. Polling will update state.");
+          if (action === "wake") {
+            const ok = await confirmModal({
+              title: `WAKE ${row.resource_type}`,
+              body: `<div class="ds-mono-muted">${row.resource_name} • ${row.region}</div>`,
+              confirmText: "Wake",
+              cancelText: "Cancel",
+            });
+            if (!ok) return;
+
+            if (row.resource_type === "EKS_CLUSTER") {
+              await Api.wakeEKS(accountId, row.resource_name, row.region);
+            } else if (row.resource_type === "RDS_INSTANCE") {
+              await Api.wakeRDS(accountId, row.resource_name, row.region);
+            }
+            toast("Orchestrator", "Wake submitted.");
+          }
         } catch (e) {
           toast("Action", e.message || "Action failed");
         } finally {

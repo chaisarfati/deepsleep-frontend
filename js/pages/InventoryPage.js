@@ -63,23 +63,14 @@ export async function InventoryPage() {
 
   qs("#ds-crumbs").textContent = "Discovery / Inventory";
 
-  // regions chips state (UI-only; request uses array)
   const initialRegions = uniq(csvToList(s.discovery.regionsCsv || "eu-west-1,eu-central-1,us-east-1"));
   Store.setState({ discovery: { regionsList: initialRegions } });
 
   page.innerHTML = renderPanel({
     title: "Inventory",
     sub: "Raw discovery via /resources/search. Select rows then Register/Unregister.",
-    actionsHtml: `
-      <span class="ds-badge ds-badge--muted">Hint: use global search <span class="ds-kbd">Ctrl</span>+<span class="ds-kbd">F</span> in table</span>
-    `,
     bodyHtml: `
       <div class="ds-row" style="margin-bottom:12px;align-items:flex-start;">
-        <div class="ds-field">
-          <div class="ds-label">Account ID</div>
-          <input class="ds-input" id="ds-inv-account" inputmode="numeric" value="${s.account.id || ""}" placeholder="(internal)" />
-        </div>
-
         <div class="ds-field" style="min-width:340px;flex:1;">
           <div class="ds-label">Regions</div>
           <div class="ds-row" style="gap:10px;">
@@ -174,24 +165,21 @@ export async function InventoryPage() {
     }
   });
 
-function readSearchPayload() {
-  // read from input first (user can override), fallback to store
-  const accountIdFromInput = (qs("#ds-inv-account")?.value || "").trim();
-  const accountId = accountIdFromInput || Store.getState().account.id;
+  function readSearchPayload() {
+    const accountId = Store.getState().account.id;
+    const regions = (Store.getState().discovery.regionsList || []);
+    const types = Store.getState().discovery.resourceTypes || ["EKS_CLUSTER", "RDS_INSTANCE"];
 
-  const regions = (Store.getState().discovery.regionsList || []);
-  const types = Store.getState().discovery.resourceTypes || ["EKS_CLUSTER", "RDS_INSTANCE"];
+    const payload = {
+      resource_types: types.length ? types : ["EKS_CLUSTER", "RDS_INSTANCE"],
+      regions: regions.length ? regions : null,
+      selector_by_type: {},
+      only_registered: false,
+    };
 
-  // Requirement: always only_registered = false, remove UI
-  const payload = {
-    resource_types: types.length ? types : ["EKS_CLUSTER", "RDS_INSTANCE"],
-    regions: regions.length ? regions : null,
-    selector_by_type: {},
-    only_registered: false,
-  };
+    return { accountId, payload };
+  }
 
-  return { accountId, payload };
-}
   function renderInventoryRows() {
     const tbody = qs("#ds-inv-tbody");
     const { resources, selectedKeys } = Store.getState().discovery;
@@ -220,7 +208,7 @@ function readSearchPayload() {
 
   async function runSearch() {
     const { accountId, payload } = readSearchPayload();
-    if (!accountId) return toast("Inventory", "Missing internal account_id.");
+    if (!accountId) return toast("Inventory", "Choose an account from Switch Account first.");
     status.textContent = "Searching…";
 
     try {
@@ -253,7 +241,7 @@ function readSearchPayload() {
     const { accountId, payload } = readSearchPayload();
     const selected = Array.from(Store.getState().discovery.selectedKeys);
 
-    if (!accountId) return toast("Batch", "Missing internal account_id.");
+    if (!accountId) return toast("Batch", "Choose an account from Switch Account first.");
     if (!selected.length) return toast("Batch", "Select at least one row.");
 
     const ok = await confirmModal({
@@ -288,7 +276,7 @@ function readSearchPayload() {
         resource_types: payload.resource_types,
         regions: payload.regions,
         selector_by_type,
-        only_registered: payload.only_registered, // false (required)
+        only_registered: false,
       },
       mode,
       dry_run: false,
@@ -314,10 +302,8 @@ function readSearchPayload() {
   btnReg.addEventListener("click", () => doBatch("REGISTER"));
   btnUnreg.addEventListener("click", () => doBatch("UNREGISTER"));
 
-  // render initial UI parts
   renderRegions();
   renderTypes();
 
-  // auto-run if logged in and account present
   if (s.auth.token && s.account.id) runSearch();
 }

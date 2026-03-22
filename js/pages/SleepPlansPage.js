@@ -12,56 +12,173 @@ function requireAuthAndAccount() {
     return false;
   }
   if (!s.account.id) {
-    toast("Setup", "Missing internal account_id. Backend should provide it in token claims.");
-    // Keep user on page; but without account id we cannot call endpoints.
+    toast("Account", "Choose an account from Switch Account first.");
     return false;
   }
   return true;
 }
 
 function getPlanNames(config) {
-  const plans = (config?.sleep_plans || {});
-  return Object.keys(plans).sort();
+  return Object.keys(config?.sleep_plans || {}).sort();
 }
 
-function buildEmptyEKSPlan() {
-  return {
-    plan_type: "EKS_CLUSTER_SLEEP",
-    step_configs: {
-      K8S_WORKLOAD_SCALE: {
-        sleep_replicas: 0,
-        selector: { exclude_namespaces: ["kube-system", "kube-public"] },
-      },
-      EKS_NODEGROUP_SCALE: {
-        sleep_min: 0,
-        sleep_desired: 0,
-        sleep_max: 1,
-      },
-    },
-  };
+function normalizePrimitiveBySchema(value, schema) {
+  const type = schema?.type;
+  if (type === "integer" || type === "number") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (type === "boolean") {
+    return !!value;
+  }
+  return value ?? "";
 }
 
-function buildEmptyRDSPlan() {
-  return {
-    plan_type: "RDS_SLEEP",
-    step_configs: {
-      RDS_INSTANCE_POWER: {
-        create_final_snapshot: false,
-      },
-    },
-  };
+function defaultValueFromSchema(schema) {
+  if (!schema) return null;
+  if (schema.default !== undefined) return schema.default;
+  if (schema.type === "boolean") return false;
+  if (schema.type === "integer" || schema.type === "number") return 0;
+  if (schema.type === "array") return [];
+  if (schema.type === "object") return {};
+  return "";
 }
 
-function readCsvNamespaces(val) {
-  return String(val || "")
+function buildInitialStepValue(stepSchema, existingValue) {
+  if (existingValue !== undefined) return existingValue;
+  const props = stepSchema?.properties || {};
+  const out = {};
+  for (const [field, fieldSchema] of Object.entries(props)) {
+    out[field] = defaultValueFromSchema(fieldSchema);
+  }
+  return out;
+}
+
+function setDeep(obj, path, value) {
+  const parts = path.split(".");
+  let cur = obj;
+  while (parts.length > 1) {
+    const p = parts.shift();
+    if (!cur[p] || typeof cur[p] !== "object") cur[p] = {};
+    cur = cur[p];
+  }
+  cur[parts[0]] = value;
+}
+
+function getDeep(obj, path) {
+  return path.split(".").reduce((acc, p) => (acc ? acc[p] : undefined), obj);
+}
+
+function dictToKvCsv(d) {
+  if (!d || typeof d !== "object") return "";
+  return Object.entries(d).map(([k, v]) => `${k}=${v}`).join(", ");
+}
+
+function kvCsvToDict(v) {
+  const out = {};
+  String(v || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .forEach((entry) => {
+      const idx = entry.indexOf("=");
+      if (idx <= 0) return;
+      const k = entry.slice(0, idx).trim();
+      const val = entry.slice(idx + 1).trim();
+      if (k) out[k] = val;
+    });
+  return out;
+}
+
+function csvToList(v) {
+  return String(v || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
-function safeInt(v, fallback) {
-  const n = Number.parseInt(String(v ?? ""), 10);
-  return Number.isFinite(n) ? n : fallback;
+function renderField(stepType, fieldName, fieldSchema, value, path) {
+  const label = fieldSchema?.title || fieldName;
+  const type = fieldSchema?.type;
+
+  if (type === "boolean") {
+    return `
+      <label class="ds-badge" style="gap:10px;">
+        <input type="checkbox" data-plan-path="${h(path)}" ${value ? "checked" : ""} />
+        <span>${h(label)}</span>
+      </label>
+    `;
+  }
+
+  if (type === "integer" || type === "number") {
+    return `
+      <div class="ds-field" style="min-width:180px;">
+        <div class="ds-label">${h(label)}</div>
+        <input class="ds-input" data-plan-path="${h(path)}" type="number" value="${h(String(value ?? 0))}" />
+      </div>
+    `;
+  }
+
+  if (type === "array" && fieldSchema?.items?.type === "string") {
+    return `
+      <div class="ds-field" style="min-width:unset;flex:1;">
+        <div class="ds-label">${h(label)} (CSV)</div>
+        <input class="ds-input" data-plan-path="${h(path)}" value="${h((value || []).join(","))}" />
+      </div>
+    `;
+  }
+
+  if (type === "object") {
+    return `
+      <div class="ds-field" style="min-width:unset;flex:1;">
+        <div class="ds-label">${h(label)} (CSV key=value)</div>
+        <input class="ds-input" data-plan-path="${h(path)}" value="${h(dictToKvCsv(value || {}))}" />
+      </div>
+    `;
+  }
+
+  return `
+    <div class="ds-field" style="min-width:unset;flex:1;">
+      <div class="ds-label">${h(label)}</div>
+      <input class="ds-input" data-plan-path="${h(path)}" value="${h(String(value ?? ""))}" />
+    </div>
+  `;
+}
+
+function serializeFieldValue(rawValue, schema) {
+  if (schema?.type === "boolean") return !!rawValue;
+  if (schema?.type === "integer" || schema?.type === "number") {
+    const n = Number(rawValue);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (schema?.type === "array" && schema?.items?.type === "string") {
+    return csvToList(rawValue);
+  }
+  if (schema?.type === "object") {
+    return kvCsvToDict(rawValue);
+  }
+  return rawValue;
+}
+
+function renderStepEditor(stepType, stepSchema, stepValue) {
+  const props = stepSchema?.properties || {};
+  const fields = Object.entries(props).map(([fieldName, fieldSchema]) => {
+    const path = `${stepType}.${fieldName}`;
+    const value = stepValue?.[fieldName];
+    return renderField(stepType, fieldName, fieldSchema, value, path);
+  });
+
+  return `
+    <div class="ds-panel" style="margin:0 0 12px 0;">
+      <div class="ds-panel__head">
+        <div>
+          <div class="ds-panel__title">${h(stepType)}</div>
+          <div class="ds-panel__sub">${h(stepSchema?.title || "Step config")}</div>
+        </div>
+      </div>
+      <div class="ds-row">${fields.join("")}</div>
+    </div>
+  `;
 }
 
 function renderPlansList(config) {
@@ -92,284 +209,213 @@ function renderPlansList(config) {
   }).join("");
 }
 
-function renderEditorBody(mode, planName, planType, plan) {
-  // Normalize plan for form fields
-  const p = plan || (planType === "RDS_SLEEP" ? buildEmptyRDSPlan() : buildEmptyEKSPlan());
-  const type = planType || p.plan_type || "EKS_CLUSTER_SLEEP";
+async function ensurePlanCatalogLoaded() {
+  const state = Store.getState();
+  const cached = state.plansCatalog.supported || {};
+  if (Object.keys(cached).length) return cached;
 
-  const isEdit = mode === "edit";
-
-  const eksK8s = (p.step_configs?.K8S_WORKLOAD_SCALE || {});
-  const eksNg = (p.step_configs?.EKS_NODEGROUP_SCALE || {});
-  const rdsPower = (p.step_configs?.RDS_INSTANCE_POWER || {});
-
-  const excludeNs = (eksK8s.selector?.exclude_namespaces || []).join(",");
-
-  return `
-    <div class="ds-row" style="margin-bottom:12px;justify-content:space-between;">
-      <span class="ds-badge">${isEdit ? "EDIT" : "NEW"}</span>
-      <span class="ds-badge ds-badge--muted">Hard borders • Strict validation happens server-side</span>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div>
-        <div class="ds-field" style="min-width:unset;">
-          <div class="ds-label">Plan Name</div>
-          <input class="ds-input" id="ds-plan-name" value="${h(planName || "")}" placeholder="ex: dev" ${isEdit ? "disabled" : ""} />
-        </div>
-
-        <div style="height:10px"></div>
-
-        <div class="ds-field" style="min-width:unset;">
-          <div class="ds-label">Plan Type</div>
-          <select class="ds-select" id="ds-plan-type" ${isEdit ? "disabled" : ""}>
-            <option value="EKS_CLUSTER_SLEEP" ${type === "EKS_CLUSTER_SLEEP" ? "selected" : ""}>EKS_CLUSTER_SLEEP</option>
-            <option value="RDS_SLEEP" ${type === "RDS_SLEEP" ? "selected" : ""}>RDS_SLEEP</option>
-          </select>
-        </div>
-
-        <div style="height:12px"></div>
-
-        <div id="ds-plan-form-eks" ${type === "EKS_CLUSTER_SLEEP" ? "" : "hidden"}>
-          <div class="ds-panel" style="margin:0;">
-            <div class="ds-panel__head">
-              <div>
-                <div class="ds-panel__title">K8S Workloads</div>
-                <div class="ds-panel__sub">K8S_WORKLOAD_SCALE</div>
-              </div>
-            </div>
-
-            <div class="ds-field" style="min-width:unset;">
-              <div class="ds-label">Sleep Replicas</div>
-              <input class="ds-input" id="ds-sleep-replicas" inputmode="numeric" value="${h(String(eksK8s.sleep_replicas ?? 0))}" />
-            </div>
-
-            <div style="height:10px"></div>
-
-            <div class="ds-field" style="min-width:unset;">
-              <div class="ds-label">Exclude Namespaces (CSV)</div>
-              <input class="ds-input" id="ds-exclude-namespaces" value="${h(excludeNs)}" placeholder="kube-system,kube-public" />
-            </div>
-          </div>
-
-          <div style="height:12px"></div>
-
-          <div class="ds-panel" style="margin:0;">
-            <div class="ds-panel__head">
-              <div>
-                <div class="ds-panel__title">EKS Nodegroups</div>
-                <div class="ds-panel__sub">EKS_NODEGROUP_SCALE (must satisfy min ≤ desired ≤ max, and max ≥ 1)</div>
-              </div>
-            </div>
-
-            <div class="ds-row">
-              <div class="ds-field" style="min-width:140px;">
-                <div class="ds-label">Min</div>
-                <input class="ds-input" id="ds-sleep-min" inputmode="numeric" value="${h(String(eksNg.sleep_min ?? 0))}" />
-              </div>
-              <div class="ds-field" style="min-width:140px;">
-                <div class="ds-label">Desired</div>
-                <input class="ds-input" id="ds-sleep-desired" inputmode="numeric" value="${h(String(eksNg.sleep_desired ?? 0))}" />
-              </div>
-              <div class="ds-field" style="min-width:140px;">
-                <div class="ds-label">Max</div>
-                <input class="ds-input" id="ds-sleep-max" inputmode="numeric" value="${h(String(eksNg.sleep_max ?? 1))}" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="ds-plan-form-rds" ${type === "RDS_SLEEP" ? "" : "hidden"}>
-          <div class="ds-panel" style="margin:0;">
-            <div class="ds-panel__head">
-              <div>
-                <div class="ds-panel__title">RDS Power</div>
-                <div class="ds-panel__sub">RDS_INSTANCE_POWER</div>
-              </div>
-            </div>
-
-            <div class="ds-row">
-              <label class="ds-badge" style="gap:10px;">
-                <input type="checkbox" id="ds-rds-final-snap" ${rdsPower.create_final_snapshot ? "checked" : ""} />
-                <span>Create final snapshot on sleep</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div style="height:12px"></div>
-
-        <div class="ds-row">
-          <button class="ds-btn" type="button" id="ds-plan-save">Save</button>
-          <button class="ds-btn ds-btn--ghost" type="button" id="ds-plan-cancel">Cancel</button>
-        </div>
-      </div>
-
-      <div>
-        <div class="ds-label">Preview</div>
-        <pre class="ds-textarea" id="ds-plan-preview" style="min-height:320px;white-space:pre;overflow:auto;"></pre>
-      </div>
-    </div>
-  `;
+  const supported = await Api.getSupportedPlans();
+  Store.setState({ plansCatalog: { ...state.plansCatalog, supported } });
+  return supported;
 }
 
-function buildPlanFromEditor() {
-  const name = (qs("#ds-plan-name")?.value || "").trim();
-  const type = (qs("#ds-plan-type")?.value || "EKS_CLUSTER_SLEEP").trim();
+async function ensurePlanSchemaLoaded(planType) {
+  const state = Store.getState();
+  const cached = state.plansCatalog.planSchemas?.[planType];
+  if (cached) return cached;
 
-  if (!name) throw new Error("Plan name required");
-
-  if (type === "RDS_SLEEP") {
-    const createFinal = !!qs("#ds-rds-final-snap")?.checked;
-    return {
-      name,
-      plan: {
-        plan_type: "RDS_SLEEP",
-        step_configs: {
-          RDS_INSTANCE_POWER: { create_final_snapshot: createFinal },
-        },
-      },
-    };
-  }
-
-  // EKS
-  const sleep_replicas = safeInt(qs("#ds-sleep-replicas")?.value, 0);
-  const exclude_namespaces = readCsvNamespaces(qs("#ds-exclude-namespaces")?.value);
-  const sleep_min = safeInt(qs("#ds-sleep-min")?.value, 0);
-  const sleep_desired = safeInt(qs("#ds-sleep-desired")?.value, 0);
-  const sleep_max = safeInt(qs("#ds-sleep-max")?.value, 1);
-
-  return {
-    name,
-    plan: {
-      plan_type: "EKS_CLUSTER_SLEEP",
-      step_configs: {
-        K8S_WORKLOAD_SCALE: {
-          sleep_replicas,
-          selector: { exclude_namespaces },
-        },
-        EKS_NODEGROUP_SCALE: {
-          sleep_min,
-          sleep_desired,
-          sleep_max,
-        },
-      },
-    },
-  };
-}
-
-function updatePreview(config) {
-  const preview = qs("#ds-plan-preview");
-  if (!preview) return;
-
-  try {
-    const { name, plan } = buildPlanFromEditor();
-    const tmp = { sleep_plans: { ...(config.sleep_plans || {}), [name]: plan } };
-    preview.textContent = JSON.stringify(tmp, null, 2);
-  } catch {
-    preview.textContent = JSON.stringify(config, null, 2);
-  }
+  const schema = await Api.getPlanSchema(planType);
+  const next = { ...(state.plansCatalog.planSchemas || {}), [planType]: schema };
+  Store.setState({ plansCatalog: { ...state.plansCatalog, planSchemas: next } });
+  return schema;
 }
 
 async function openEditor({ mode, planName, existingPlan }) {
   const host = qs("#ds-modalhost");
   if (!host) return;
 
-  const type = existingPlan?.plan_type || "EKS_CLUSTER_SLEEP";
+  const supported = await ensurePlanCatalogLoaded();
+  const supportedPlanTypes = Object.keys(supported || {}).sort();
+  const initialPlanType = existingPlan?.plan_type || supportedPlanTypes[0];
+  const initialSchema = await ensurePlanSchemaLoaded(initialPlanType);
 
-  host.innerHTML = `
-    <div class="ds-modalbackdrop" data-backdrop="1"></div>
-    <div class="ds-modal" role="dialog" aria-modal="true" aria-label="Sleep Plan Editor">
-      <div class="ds-modal__head">
-        <div class="ds-modal__title">${mode === "edit" ? `Edit Plan: ${h(planName)}` : "Create New Plan"}</div>
-        <button class="ds-btn ds-btn--ghost" type="button" data-close="1">Close</button>
-      </div>
-      <div class="ds-modal__body">
-        ${renderEditorBody(mode, planName, type, existingPlan)}
-      </div>
-    </div>
-  `;
-  host.style.pointerEvents = "auto";
-
-  const close = () => {
-    host.innerHTML = "";
-    host.style.pointerEvents = "none";
+  let editorState = {
+    name: planName || "",
+    plan_type: initialPlanType,
+    step_configs: {},
   };
 
-  host.addEventListener("click", (e) => {
-    const t = e.target;
-    if (t?.dataset?.backdrop || t?.dataset?.close) close();
-  }, { once: true });
-
-  const planTypeSel = qs("#ds-plan-type");
-  const eksForm = qs("#ds-plan-form-eks");
-  const rdsForm = qs("#ds-plan-form-rds");
-  const cancelBtn = qs("#ds-plan-cancel");
-  const saveBtn = qs("#ds-plan-save");
-
-  const config = Store.getState().sleepPlans.config;
-
-  function toggleType() {
-    const v = planTypeSel.value;
-    if (eksForm) eksForm.hidden = v !== "EKS_CLUSTER_SLEEP";
-    if (rdsForm) rdsForm.hidden = v !== "RDS_SLEEP";
-    updatePreview(config);
+  for (const [stepType, stepSchema] of Object.entries(initialSchema || {})) {
+    const existingStep = existingPlan?.step_configs?.[stepType];
+    editorState.step_configs[stepType] = buildInitialStepValue(stepSchema, existingStep);
   }
 
-  planTypeSel?.addEventListener("change", toggleType);
+  function renderEditor() {
+    const currentSchema = Store.getState().plansCatalog.planSchemas?.[editorState.plan_type] || {};
+    const stepEditors = Object.entries(currentSchema).map(([stepType, stepSchema]) => {
+      return renderStepEditor(stepType, stepSchema, editorState.step_configs?.[stepType] || {});
+    }).join("");
 
-  // bind preview updates
-  [
-    "#ds-plan-name",
-    "#ds-sleep-replicas",
-    "#ds-exclude-namespaces",
-    "#ds-sleep-min",
-    "#ds-sleep-desired",
-    "#ds-sleep-max",
-    "#ds-rds-final-snap",
-  ].forEach((sel) => {
-    const el = qs(sel);
-    if (!el) return;
-    el.addEventListener("input", () => updatePreview(config));
-    el.addEventListener("change", () => updatePreview(config));
-  });
+    host.innerHTML = `
+      <div class="ds-modalbackdrop" data-backdrop="1"></div>
+      <div class="ds-modal" role="dialog" aria-modal="true" aria-label="Sleep Plan Editor">
+        <div class="ds-modal__head">
+          <div class="ds-modal__title">${mode === "edit" ? `Edit Plan: ${h(editorState.name)}` : "Create New Plan"}</div>
+          <button class="ds-btn ds-btn--ghost" type="button" data-close="1">Close</button>
+        </div>
+        <div class="ds-modal__body">
+          <div class="ds-row" style="margin-bottom:12px;justify-content:space-between;">
+            <span class="ds-badge">${mode === "edit" ? "EDIT" : "NEW"}</span>
+            <span class="ds-badge ds-badge--muted">Source of truth: api/v1/plans + api/v1/schemas/plans/{plan_type}</span>
+          </div>
 
-  cancelBtn?.addEventListener("click", close);
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div class="ds-field" style="min-width:unset;">
+                <div class="ds-label">Plan Name</div>
+                <input class="ds-input" id="ds-plan-name" value="${h(editorState.name)}" placeholder="ex: dev" ${mode === "edit" ? "disabled" : ""} />
+              </div>
 
-  saveBtn?.addEventListener("click", async () => {
-    try {
-      const s = Store.getState();
-      const accountId = s.account.id;
-      const cfg = { ...(s.sleepPlans.config || { sleep_plans: {} }) };
-      cfg.sleep_plans = { ...(cfg.sleep_plans || {}) };
+              <div style="height:10px"></div>
 
-      const { name, plan } = buildPlanFromEditor();
+              <div class="ds-field" style="min-width:unset;">
+                <div class="ds-label">Plan Type</div>
+                <select class="ds-select" id="ds-plan-type" ${mode === "edit" ? "disabled" : ""}>
+                  ${supportedPlanTypes.map((pt) => `<option value="${h(pt)}" ${pt === editorState.plan_type ? "selected" : ""}>${h(pt)}</option>`).join("")}
+                </select>
+              </div>
 
-      // write back plan
-      cfg.sleep_plans[name] = plan;
+              <div style="height:12px"></div>
+              <div id="ds-steps-container">${stepEditors}</div>
 
-      // PUT whole config
-      const saved = await Api.putAccountConfig(accountId, cfg);
+              <div class="ds-row">
+                <button class="ds-btn" type="button" id="ds-plan-save">Save</button>
+                <button class="ds-btn ds-btn--ghost" type="button" id="ds-plan-cancel">Cancel</button>
+              </div>
+            </div>
 
-      Store.setState({
-        sleepPlans: {
-          config: saved || cfg,
-          names: getPlanNames(saved || cfg),
-        },
-      });
+            <div>
+              <div class="ds-label">Preview</div>
+              <pre class="ds-textarea" id="ds-plan-preview" style="min-height:320px;white-space:pre;overflow:auto;"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    host.style.pointerEvents = "auto";
 
-      // also refresh plan dropdowns used elsewhere
-      toast("Sleep Plans", "Saved.");
-      close();
-      // rerender page list
-      await SleepPlansPage();
-    } catch (e) {
-      toast("Sleep Plans", e.message || "Save failed");
+    bindEditor();
+    updatePreview();
+  }
+
+  function close() {
+    host.innerHTML = "";
+    host.style.pointerEvents = "none";
+  }
+
+  async function onPlanTypeChange() {
+    const select = qs("#ds-plan-type");
+    const nextType = select?.value;
+    if (!nextType || nextType === editorState.plan_type) return;
+
+    editorState.plan_type = nextType;
+    const schema = await ensurePlanSchemaLoaded(nextType);
+    editorState.step_configs = {};
+    for (const [stepType, stepSchema] of Object.entries(schema || {})) {
+      editorState.step_configs[stepType] = buildInitialStepValue(stepSchema, undefined);
     }
-  });
+    renderEditor();
+  }
 
-  toggleType();
-  updatePreview(config);
+  function updatePreview() {
+    const preview = qs("#ds-plan-preview");
+    if (!preview) return;
+    const name = editorState.name || "(plan_name)";
+    preview.textContent = JSON.stringify({
+      sleep_plans: {
+        [name]: {
+          plan_type: editorState.plan_type,
+          step_configs: editorState.step_configs,
+        },
+      },
+    }, null, 2);
+  }
+
+  function bindEditor() {
+    const nameInput = qs("#ds-plan-name");
+    const typeSelect = qs("#ds-plan-type");
+    const cancelBtn = qs("#ds-plan-cancel");
+    const saveBtn = qs("#ds-plan-save");
+
+    host.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t?.dataset?.backdrop || t?.dataset?.close) close();
+    }, { once: true });
+
+    nameInput?.addEventListener("input", () => {
+      editorState.name = nameInput.value.trim();
+      updatePreview();
+    });
+
+    typeSelect?.addEventListener("change", onPlanTypeChange);
+
+    qsa("[data-plan-path]").forEach((el) => {
+      el.addEventListener("input", () => {
+        const path = el.dataset.planPath;
+        const [stepType, fieldName] = path.split(".");
+        const planSchema = Store.getState().plansCatalog.planSchemas?.[editorState.plan_type] || {};
+        const fieldSchema = planSchema?.[stepType]?.properties?.[fieldName];
+        const raw = el.type === "checkbox" ? el.checked : el.value;
+        const nextVal = serializeFieldValue(raw, fieldSchema);
+        setDeep(editorState.step_configs, path, nextVal);
+        updatePreview();
+      });
+      el.addEventListener("change", () => {
+        const path = el.dataset.planPath;
+        const [stepType, fieldName] = path.split(".");
+        const planSchema = Store.getState().plansCatalog.planSchemas?.[editorState.plan_type] || {};
+        const fieldSchema = planSchema?.[stepType]?.properties?.[fieldName];
+        const raw = el.type === "checkbox" ? el.checked : el.value;
+        const nextVal = serializeFieldValue(raw, fieldSchema);
+        setDeep(editorState.step_configs, path, nextVal);
+        updatePreview();
+      });
+    });
+
+    cancelBtn?.addEventListener("click", close);
+
+    saveBtn?.addEventListener("click", async () => {
+      try {
+        const s = Store.getState();
+        if (!editorState.name) throw new Error("Plan name required");
+
+        const cfg = { ...(s.sleepPlans.config || { sleep_plans: {} }) };
+        cfg.sleep_plans = { ...(cfg.sleep_plans || {}) };
+
+        cfg.sleep_plans[editorState.name] = {
+          plan_type: editorState.plan_type,
+          step_configs: editorState.step_configs,
+        };
+
+        const saved = await Api.putAccountConfig(s.account.id, cfg);
+
+        Store.setState({
+          sleepPlans: {
+            config: saved || cfg,
+            names: getPlanNames(saved || cfg),
+          },
+        });
+
+        toast("Sleep Plans", "Saved.");
+        close();
+        await SleepPlansPage();
+      } catch (e) {
+        toast("Sleep Plans", e.message || "Save failed");
+      }
+    });
+  }
+
+  renderEditor();
 }
 
 export async function SleepPlansPage() {
@@ -402,6 +448,7 @@ export async function SleepPlansPage() {
     const s = Store.getState();
     status.textContent = "Fetching configuration…";
     try {
+      await ensurePlanCatalogLoaded();
       const cfg = await Api.getAccountConfig(s.account.id);
       const names = getPlanNames(cfg);
       Store.setState({ sleepPlans: { config: cfg, names } });

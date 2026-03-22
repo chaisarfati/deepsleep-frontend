@@ -4,6 +4,14 @@ import { request } from "./client.js";
 export const login = (payload) => request("/auth/login", { method: "POST", body: payload });
 export const refresh = (payload) => request("/auth/refresh", { method: "POST", body: payload });
 
+/* Accounts */
+export const listAccounts = () => request("/accounts");
+
+/* Plan catalog / schemas */
+export const getSupportedPlans = () => request("api/v1/plans");
+export const getStepSchema = (stepType) => request(`api/v1/schemas/steps/${encodeURIComponent(stepType)}`);
+export const getPlanSchema = (planType) => request(`api/v1/schemas/plans/${encodeURIComponent(planType)}`);
+
 /* Account Config (Sleep Plans) */
 export const getAccountConfig = (accountId) =>
   request(`/accounts/${accountId}/config`);

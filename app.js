@@ -6,7 +6,7 @@ import { toast } from "./js/utils/toast.js";
 
 import { renderSidebar, setActiveNav } from "./js/components/Sidebar.js";
 import { renderHeader } from "./js/components/Header.js";
-import { bindUserDropdown, renderUserInfo } from "./js/components/UserDropdown.js";
+import { bindUserDropdown, renderUserInfo, loadAccountsIntoDropdown } from "./js/components/UserDropdown.js";
 import { bindGlobalSearch } from "./js/components/SearchBar.js";
 import { applyTableFilter } from "./js/components/TableFilters.js";
 import { patchActiveRow } from "./js/components/ActiveRowPatcher.js";
@@ -36,7 +36,6 @@ import * as Api from "./js/api/services.js";
     if (route === "active") applyTableFilter('[data-table="active"]', q);
   });
 
-  // API indicator is internal now
   const apiIndicator = qs("#ds-api-indicator");
   if (apiIndicator) apiIndicator.textContent = "same-origin";
 })();
@@ -50,32 +49,35 @@ router.register("active", async () => ActiveResourcesPage());
 router.register("policies", async () => TimePoliciesPage());
 router.register("settings", async () => SleepPlansPage());
 
-function initialRoute(route) {
+async function initialRoute(route) {
   const s = Store.getState();
   const hasToken = !!s.auth.token;
 
-  // Landing: if not logged in -> /login
   if (!hasToken && route.name !== "login") {
     location.hash = "#/login";
     return;
   }
 
-  // If logged in and user hits /login, redirect to discovery
   if (hasToken && route.name === "login") {
     location.hash = "#/discovery";
     return;
+  }
+
+  if (hasToken) {
+    await loadAccountsIntoDropdown();
   }
 
   Store.setState({ route });
   setActiveNav(route.name);
   router.render(route);
 
-  // keep search input in sync
   const input = qs("#ds-global-search");
   if (input) input.value = Store.getState().ui.search || "";
 }
 
-router.start((route) => initialRoute(route));
+router.start((route) => {
+  initialRoute(route);
+});
 
 /* ---------- Polling (10s) ----------
    Fetch /accounts/{id}/cluster-states and patch only changed rows.

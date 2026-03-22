@@ -13,31 +13,38 @@ const state = {
   },
 
   account: {
-    // internal; we try to derive from JWT payload on login
     id: Number(Storage.get("deepsleep.account_id", "0") || 0) || 0,
-    aws_account_id: Storage.get("deepsleep.aws_account_id", ""), // display only, currently unknown
+    aws_account_id: Storage.get("deepsleep.aws_account_id", ""),
     name: Storage.get("deepsleep.account_name", "—"),
+  },
+
+  accounts: {
+    list: [], // [{id, name, aws_account_id}]
+    loaded: false,
+  },
+
+  plansCatalog: {
+    supported: {},      // GET api/v1/plans
+    planSchemas: {},    // GET api/v1/schemas/plans/{plan_type}
   },
 
   discovery: {
     lastQuery: null,
     resources: [],
     selectedKeys: new Set(),
-    onlyRegistered: false,
     regionsCsv: "eu-west-1,eu-central-1,us-east-1",
+    regionsList: [],
     resourceTypes: ["EKS_CLUSTER", "RDS_INSTANCE"],
   },
 
   active: {
     rowsByKey: new Map(),
     lastPollAt: null,
-    plans: { EKS_CLUSTER: "dev", RDS_INSTANCE: "rds_dev" },
   },
 
   sleepPlans: {
-    // loaded from /accounts/{id}/config
     config: { sleep_plans: {} },
-    names: [], // convenience cache
+    names: [],
     loading: false,
   },
 
@@ -45,6 +52,11 @@ const state = {
     list: [],
     selectedId: null,
     loading: false,
+    editorWindows: [],
+    editorSelectors: {
+      EKS_CLUSTER: {},
+      RDS_INSTANCE: {},
+    },
   },
 };
 

@@ -4,7 +4,6 @@ import { toast } from "../utils/toast.js";
 import { qs } from "../utils/dom.js";
 import { renderPanel } from "../components/Panel.js";
 import * as Api from "../api/services.js";
-import { decodeJwtPayload } from "../utils/jwt.js";
 import { renderUserInfo } from "../components/UserDropdown.js";
 
 export async function LoginPage() {
@@ -12,11 +11,8 @@ export async function LoginPage() {
   const page = qs("#ds-page");
   if (!page) return;
 
-  // crumbs
   const crumbs = qs("#ds-crumbs");
   if (crumbs) crumbs.textContent = "Login";
-
-  const storedAccountId = Storage.get("deepsleep.account_id") || "";
 
   page.innerHTML = renderPanel({
     title: "Login",
@@ -38,11 +34,6 @@ export async function LoginPage() {
           <input class="ds-input" id="ds-login-biz" value="${s.auth.business_id || ""}" placeholder="business_id" />
         </div>
 
-        <div class="ds-field">
-          <div class="ds-label">Account ID (internal)</div>
-          <input class="ds-input" id="ds-login-account" inputmode="numeric" value="${s.account.id || storedAccountId || ""}" placeholder="account_id" />
-        </div>
-
         <div class="ds-row">
           <button class="ds-btn ds-btn--wake" id="ds-login-btn" type="button">Login</button>
           <button class="ds-btn" id="ds-login-clear" type="button">Clear Token</button>
@@ -56,16 +47,12 @@ export async function LoginPage() {
   const email = qs("#ds-login-email");
   const pass = qs("#ds-login-pass");
   const biz = qs("#ds-login-biz");
-  const account = qs("#ds-login-account");
   const btnLogin = qs("#ds-login-btn");
   const btnClear = qs("#ds-login-clear");
   const tokenPreview = qs("#ds-token-preview");
 
   btnLogin.addEventListener("click", async () => {
     try {
-      const accountIdRaw = (account.value || "").trim();
-      if (accountIdRaw) Storage.set("deepsleep.account_id", accountIdRaw);
-
       const payload = { email: email.value.trim(), password: pass.value, business_id: biz.value.trim() };
       if (!payload.email || !payload.password || !payload.business_id) throw new Error("Missing email/password/business_id.");
 
@@ -73,22 +60,15 @@ export async function LoginPage() {
       const token = resp?.token;
       if (!token) throw new Error("No token returned.");
 
-      // Save auth
       Storage.set("deepsleep.token", token);
       Storage.set("deepsleep.email", payload.email);
       Storage.set("deepsleep.business_id", payload.business_id);
 
-      // If account_id wasn't provided manually, try to infer from JWT and store it
-      let inferredAccountId =
-        Number(accountIdRaw || 0) ||
-        Number((decodeJwtPayload(token) || {}).account_id || (decodeJwtPayload(token) || {}).accountId || (decodeJwtPayload(token) || {}).aws_account_internal_id || 0) ||
-        0;
-
-      if (inferredAccountId) Storage.set("deepsleep.account_id", String(inferredAccountId));
-
+      // account is now loaded from GET /accounts in dropdown logic
       Store.setState({
         auth: { token, email: payload.email, business_id: payload.business_id },
-        account: { id: inferredAccountId || Store.getState().account.id },
+        account: { id: 0, aws_account_id: "" },
+        accounts: { list: [], loaded: false },
       });
 
       tokenPreview.textContent = token.slice(0, 28);
@@ -103,7 +83,15 @@ export async function LoginPage() {
 
   btnClear.addEventListener("click", () => {
     Storage.del("deepsleep.token");
-    Store.setState({ auth: { token: "" } });
+    Storage.del("deepsleep.account_id");
+    Storage.del("deepsleep.aws_account_id");
+
+    Store.setState({
+      auth: { token: "" },
+      account: { id: 0, aws_account_id: "" },
+      accounts: { list: [], loaded: false },
+    });
+
     tokenPreview.textContent = "—";
     toast("Auth", "Token cleared.");
   });

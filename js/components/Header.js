@@ -40,6 +40,14 @@ export function renderHeader() {
           <div class="ds-dropdown__k">Business ID</div>
           <div class="ds-dropdown__v" id="ds-dd-biz">—</div>
         </div>
+        <div class="ds-dropdown__row">
+          <div class="ds-dropdown__k">Switch Account</div>
+          <div class="ds-dropdown__v" style="min-width:180px;max-width:none;">
+            <select class="ds-select" id="ds-account-switch" style="min-width:180px;">
+              <option value="">(loading...)</option>
+            </select>
+          </div>
+        </div>
         <div class="ds-dropdown__sep" aria-hidden="true"></div>
         <div class="ds-dropdown__row">
           <button class="ds-btn ds-btn--ghost" id="ds-logout-btn" type="button">Logout</button>

@@ -1,11 +1,60 @@
 import { Store } from "../store.js";
-import { Storage } from "../utils/storage.js";
 import { toast, confirmModal } from "../utils/toast.js";
-import { qs, qsa } from "../utils/dom.js";
+import { qs, qsa, escapeHtml as h } from "../utils/dom.js";
 import { renderPanel } from "../components/Panel.js";
 import { applyTableFilter } from "../components/TableFilters.js";
 import { renderInventoryRow } from "../components/ResourceRow.js";
 import * as Api from "../api/services.js";
+
+function csvToList(v) {
+  return String(v || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function uniq(arr) {
+  const out = [];
+  const set = new Set();
+  for (const x of arr) {
+    const k = String(x || "").trim();
+    if (!k || set.has(k)) continue;
+    set.add(k);
+    out.push(k);
+  }
+  return out;
+}
+
+function renderRegionChips(regions) {
+  const list = regions || [];
+  if (!list.length) return `<div class="ds-mono-muted" style="padding:6px 0;">No regions selected.</div>`;
+  return `
+    <div class="ds-row" style="gap:8px;flex-wrap:wrap;">
+      ${list.map((r) => `
+        <span class="ds-badge" style="gap:10px;">
+          <span>${h(r)}</span>
+          <button class="ds-btn ds-btn--ghost" type="button" data-region-remove="${h(r)}" style="padding:0 6px;box-shadow:none;">x</button>
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderTypeChecklist(selectedTypes) {
+  const sel = new Set(selectedTypes || []);
+  return `
+    <div class="ds-panel" style="margin:0;padding:10px;max-height:92px;overflow:auto;">
+      <label class="ds-badge" style="gap:10px;display:flex;align-items:center;margin-bottom:8px;">
+        <input type="checkbox" class="ds-type-check" value="EKS_CLUSTER" ${sel.has("EKS_CLUSTER") ? "checked" : ""} />
+        <span>EKS_CLUSTER</span>
+      </label>
+      <label class="ds-badge" style="gap:10px;display:flex;align-items:center;">
+        <input type="checkbox" class="ds-type-check" value="RDS_INSTANCE" ${sel.has("RDS_INSTANCE") ? "checked" : ""} />
+        <span>RDS_INSTANCE</span>
+      </label>
+    </div>
+  `;
+}
 
 export async function InventoryPage() {
   const s = Store.getState();
@@ -14,40 +63,42 @@ export async function InventoryPage() {
 
   qs("#ds-crumbs").textContent = "Discovery / Inventory";
 
+  // regions chips state (UI-only; request uses array)
+  const initialRegions = uniq(csvToList(s.discovery.regionsCsv || "eu-west-1,eu-central-1,us-east-1"));
+  Store.setState({ discovery: { regionsList: initialRegions } });
+
   page.innerHTML = renderPanel({
     title: "Inventory",
-    sub: "Raw discovery via /resources/search. Select rows then Batch Register.",
+    sub: "Raw discovery via /resources/search. Select rows then Register/Unregister.",
     actionsHtml: `
       <span class="ds-badge ds-badge--muted">Hint: use global search <span class="ds-kbd">Ctrl</span>+<span class="ds-kbd">F</span> in table</span>
     `,
     bodyHtml: `
-      <div class="ds-row" style="margin-bottom:12px;">
+      <div class="ds-row" style="margin-bottom:12px;align-items:flex-start;">
         <div class="ds-field">
           <div class="ds-label">Account ID</div>
-          <input class="ds-input" id="ds-inv-account" inputmode="numeric" value="${s.account.id || ""}" placeholder="e.g. 1" />
+          <input class="ds-input" id="ds-inv-account" inputmode="numeric" value="${s.account.id || ""}" placeholder="(internal)" />
         </div>
-        <div class="ds-field">
-          <div class="ds-label">Regions (CSV)</div>
-          <input class="ds-input" id="ds-inv-regions" value="${s.discovery.regionsCsv}" placeholder="eu-west-1,us-east-1" />
+
+        <div class="ds-field" style="min-width:340px;flex:1;">
+          <div class="ds-label">Regions</div>
+          <div class="ds-row" style="gap:10px;">
+            <input class="ds-input" id="ds-region-input" placeholder="Type a region and press Add (e.g. eu-west-1)" />
+            <button class="ds-btn" id="ds-region-add" type="button">Add</button>
+          </div>
+          <div style="height:8px"></div>
+          <div id="ds-region-chips"></div>
         </div>
-        <div class="ds-field">
+
+        <div class="ds-field" style="min-width:240px;">
           <div class="ds-label">Resource Types</div>
-          <select class="ds-select" id="ds-inv-types" multiple size="2" aria-label="Resource types">
-            <option value="EKS_CLUSTER" ${s.discovery.resourceTypes.includes("EKS_CLUSTER") ? "selected" : ""}>EKS_CLUSTER</option>
-            <option value="RDS_INSTANCE" ${s.discovery.resourceTypes.includes("RDS_INSTANCE") ? "selected" : ""}>RDS_INSTANCE</option>
-          </select>
+          <div id="ds-types-box"></div>
         </div>
-        <div class="ds-field" style="min-width:260px;">
-          <div class="ds-label">Only Registered</div>
-          <select class="ds-select" id="ds-inv-onlyreg">
-            <option value="0" ${s.discovery.onlyRegistered ? "" : "selected"}>false</option>
-            <option value="1" ${s.discovery.onlyRegistered ? "selected" : ""}>true</option>
-          </select>
-        </div>
-        <div class="ds-row" style="margin-left:auto;">
+
+        <div class="ds-row" style="margin-left:auto;align-self:flex-end;">
           <button class="ds-btn" id="ds-inv-run" type="button">Run Search</button>
-          <button class="ds-btn ds-btn--wake" id="ds-inv-batch-reg" type="button">Batch Register</button>
-          <button class="ds-btn ds-btn--sleep" id="ds-inv-batch-unreg" type="button">Batch Unregister</button>
+          <button class="ds-btn ds-btn--wake" id="ds-inv-batch-reg" type="button">Register</button>
+          <button class="ds-btn ds-btn--danger" id="ds-inv-batch-unreg" type="button">Unregister</button>
         </div>
       </div>
 
@@ -73,37 +124,74 @@ export async function InventoryPage() {
     `,
   });
 
-  const invAccount = qs("#ds-inv-account");
-  const invRegions = qs("#ds-inv-regions");
-  const invTypes = qs("#ds-inv-types");
-  const invOnlyReg = qs("#ds-inv-onlyreg");
   const btnRun = qs("#ds-inv-run");
   const btnReg = qs("#ds-inv-batch-reg");
   const btnUnreg = qs("#ds-inv-batch-unreg");
   const status = qs("#ds-inv-status");
 
-  function readSearchPayload() {
-    const accountId = Number(invAccount.value || 0);
-    const regions = invRegions.value.split(",").map((x) => x.trim()).filter(Boolean);
-    const types = Array.from(invTypes.selectedOptions).map((o) => o.value);
-    const only_registered = invOnlyReg.value === "1";
+  const regionInput = qs("#ds-region-input");
+  const regionAdd = qs("#ds-region-add");
+  const chips = qs("#ds-region-chips");
+  const typesBox = qs("#ds-types-box");
 
-    const payload = {
-      resource_types: types.length ? types : ["EKS_CLUSTER", "RDS_INSTANCE"],
-      regions: regions.length ? regions : null,
-      selector_by_type: {},
-      only_registered,
-    };
-
-    Storage.set("deepsleep.account_id", String(accountId || ""));
-    Store.setState({
-      account: { id: accountId },
-      discovery: { regionsCsv: invRegions.value, onlyRegistered: only_registered, resourceTypes: payload.resource_types },
+  function renderRegions() {
+    const regions = Store.getState().discovery.regionsList || [];
+    chips.innerHTML = renderRegionChips(regions);
+    qsa("[data-region-remove]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const r = b.dataset.regionRemove;
+        const next = (Store.getState().discovery.regionsList || []).filter((x) => x !== r);
+        Store.setState({ discovery: { regionsList: next, regionsCsv: next.join(",") } });
+        renderRegions();
+      });
     });
-
-    return { accountId, payload };
   }
 
+  function renderTypes() {
+    const types = Store.getState().discovery.resourceTypes || ["EKS_CLUSTER", "RDS_INSTANCE"];
+    typesBox.innerHTML = renderTypeChecklist(types);
+    qsa(".ds-type-check", typesBox).forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const picked = qsa(".ds-type-check", typesBox).filter((x) => x.checked).map((x) => x.value);
+        Store.setState({ discovery: { resourceTypes: picked.length ? picked : ["EKS_CLUSTER", "RDS_INSTANCE"] } });
+      });
+    });
+  }
+
+  regionAdd.addEventListener("click", () => {
+    const v = (regionInput.value || "").trim();
+    if (!v) return;
+    const next = uniq([...(Store.getState().discovery.regionsList || []), v]);
+    Store.setState({ discovery: { regionsList: next, regionsCsv: next.join(",") } });
+    regionInput.value = "";
+    renderRegions();
+  });
+
+  regionInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      regionAdd.click();
+    }
+  });
+
+function readSearchPayload() {
+  // read from input first (user can override), fallback to store
+  const accountIdFromInput = (qs("#ds-inv-account")?.value || "").trim();
+  const accountId = accountIdFromInput || Store.getState().account.id;
+
+  const regions = (Store.getState().discovery.regionsList || []);
+  const types = Store.getState().discovery.resourceTypes || ["EKS_CLUSTER", "RDS_INSTANCE"];
+
+  // Requirement: always only_registered = false, remove UI
+  const payload = {
+    resource_types: types.length ? types : ["EKS_CLUSTER", "RDS_INSTANCE"],
+    regions: regions.length ? regions : null,
+    selector_by_type: {},
+    only_registered: false,
+  };
+
+  return { accountId, payload };
+}
   function renderInventoryRows() {
     const tbody = qs("#ds-inv-tbody");
     const { resources, selectedKeys } = Store.getState().discovery;
@@ -132,7 +220,7 @@ export async function InventoryPage() {
 
   async function runSearch() {
     const { accountId, payload } = readSearchPayload();
-    if (!accountId) return toast("Inventory", "Missing account_id.");
+    if (!accountId) return toast("Inventory", "Missing internal account_id.");
     status.textContent = "Searching…";
 
     try {
@@ -165,13 +253,13 @@ export async function InventoryPage() {
     const { accountId, payload } = readSearchPayload();
     const selected = Array.from(Store.getState().discovery.selectedKeys);
 
-    if (!accountId) return toast("Batch", "Missing account_id.");
+    if (!accountId) return toast("Batch", "Missing internal account_id.");
     if (!selected.length) return toast("Batch", "Select at least one row.");
 
     const ok = await confirmModal({
-      title: `Batch ${mode}`,
+      title: mode === "REGISTER" ? "Register selected" : "Unregister selected",
       body: `<div class="ds-mono-muted">Selected: ${selected.length}. This will call /resources/batch-register.</div>`,
-      confirmText: `Run ${mode}`,
+      confirmText: mode === "REGISTER" ? "Register" : "Unregister",
       cancelText: "Cancel",
     });
     if (!ok) return;
@@ -200,13 +288,13 @@ export async function InventoryPage() {
         resource_types: payload.resource_types,
         regions: payload.regions,
         selector_by_type,
-        only_registered: payload.only_registered,
+        only_registered: payload.only_registered, // false (required)
       },
       mode,
       dry_run: false,
     };
 
-    status.textContent = `Batch ${mode}…`;
+    status.textContent = `${mode}…`;
     try {
       const resp = await Api.batchRegister(accountId, body);
       const results = resp?.results || [];
@@ -226,6 +314,10 @@ export async function InventoryPage() {
   btnReg.addEventListener("click", () => doBatch("REGISTER"));
   btnUnreg.addEventListener("click", () => doBatch("UNREGISTER"));
 
-  // Auto-run if we already have a token + account id
+  // render initial UI parts
+  renderRegions();
+  renderTypes();
+
+  // auto-run if logged in and account present
   if (s.auth.token && s.account.id) runSearch();
 }

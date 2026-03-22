@@ -31,6 +31,7 @@ export function renderActiveRow(r) {
   const locked = !!(r.locked_until && new Date(r.locked_until).getTime() > Date.now());
   const sleepDisabled = locked || String(r.observed_state || "").toUpperCase() === "SLEEPING";
   const wakeDisabled = locked || String(r.observed_state || "").toUpperCase() === "RUNNING";
+  const unregDisabled = locked; // backend may also refuse if sleeping; we let backend validate
 
   return `
     <tr data-key="${h(r.key)}" data-hay="${h(hay)}">
@@ -45,6 +46,7 @@ export function renderActiveRow(r) {
         <div class="ds-row">
           <button class="ds-btn ds-btn--sleep" type="button" data-action="sleep" data-key="${h(r.key)}" ${sleepDisabled ? "disabled" : ""}>Sleep</button>
           <button class="ds-btn ds-btn--wake" type="button" data-action="wake" data-key="${h(r.key)}" ${wakeDisabled ? "disabled" : ""}>Wake</button>
+          <button class="ds-btn ds-btn--danger" type="button" data-action="unregister" data-key="${h(r.key)}" ${unregDisabled ? "disabled" : ""}>Unregister</button>
         </div>
       </td>
     </tr>

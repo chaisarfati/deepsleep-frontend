@@ -16,6 +16,8 @@ export async function LoginPage() {
   const crumbs = qs("#ds-crumbs");
   if (crumbs) crumbs.textContent = "Login";
 
+  const storedAccountId = Storage.get("deepsleep.account_id") || "";
+
   page.innerHTML = renderPanel({
     title: "Login",
     sub: "Business user authentication. You will be redirected to Discovery after success.",
@@ -36,6 +38,11 @@ export async function LoginPage() {
           <input class="ds-input" id="ds-login-biz" value="${s.auth.business_id || ""}" placeholder="business_id" />
         </div>
 
+        <div class="ds-field">
+          <div class="ds-label">Account ID (internal)</div>
+          <input class="ds-input" id="ds-login-account" inputmode="numeric" value="${s.account.id || storedAccountId || ""}" placeholder="account_id" />
+        </div>
+
         <div class="ds-row">
           <button class="ds-btn ds-btn--wake" id="ds-login-btn" type="button">Login</button>
           <button class="ds-btn" id="ds-login-clear" type="button">Clear Token</button>
@@ -49,12 +56,16 @@ export async function LoginPage() {
   const email = qs("#ds-login-email");
   const pass = qs("#ds-login-pass");
   const biz = qs("#ds-login-biz");
+  const account = qs("#ds-login-account");
   const btnLogin = qs("#ds-login-btn");
   const btnClear = qs("#ds-login-clear");
   const tokenPreview = qs("#ds-token-preview");
 
   btnLogin.addEventListener("click", async () => {
     try {
+      const accountIdRaw = (account.value || "").trim();
+      if (accountIdRaw) Storage.set("deepsleep.account_id", accountIdRaw);
+
       const payload = { email: email.value.trim(), password: pass.value, business_id: biz.value.trim() };
       if (!payload.email || !payload.password || !payload.business_id) throw new Error("Missing email/password/business_id.");
 
@@ -67,12 +78,12 @@ export async function LoginPage() {
       Storage.set("deepsleep.email", payload.email);
       Storage.set("deepsleep.business_id", payload.business_id);
 
-      // Try to derive internal account_id / business_id from JWT payload if present
-      const claims = decodeJwtPayload(token) || {};
-      const inferredAccountId =
-        Number(claims.account_id || claims.accountId || claims.aws_account_internal_id || 0) || 0;
+      // If account_id wasn't provided manually, try to infer from JWT and store it
+      let inferredAccountId =
+        Number(accountIdRaw || 0) ||
+        Number((decodeJwtPayload(token) || {}).account_id || (decodeJwtPayload(token) || {}).accountId || (decodeJwtPayload(token) || {}).aws_account_internal_id || 0) ||
+        0;
 
-      // Keep internal account id if inferred; else keep any existing stored value
       if (inferredAccountId) Storage.set("deepsleep.account_id", String(inferredAccountId));
 
       Store.setState({

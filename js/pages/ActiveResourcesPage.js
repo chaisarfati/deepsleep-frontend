@@ -12,27 +12,23 @@ export async function ActiveResourcesPage() {
   const page = qs("#ds-page");
   if (!page) return;
 
-  if (!s.account.id) {
-    toast("Setup", "Missing account_id. Configure it in Settings.");
-    location.hash = "#/settings";
-    return;
-  }
-
+  // Do not hard-block: allow manual account id entry (same fix as Inventory)
   qs("#ds-crumbs").textContent = "Active Resources / Control Panel";
 
   page.innerHTML = renderPanel({
     title: "Control Panel",
-    sub: "Registered resources with one-click Sleep/Wake. Polls every 10 seconds and patches only changed rows.",
+    sub: "Registered resources with one-click Sleep/Wake/Unregister. Polls every 10 seconds and patches only changed rows.",
     actionsHtml: `
       <span class="ds-badge ds-badge--reg">Registered</span>
       <span class="ds-badge">Wake: blue</span>
       <span class="ds-badge">Sleep: brick</span>
+      <span class="ds-badge">Unregister: danger</span>
     `,
     bodyHtml: `
       <div class="ds-row" style="margin-bottom:12px;">
         <div class="ds-field">
           <div class="ds-label">Account ID</div>
-          <input class="ds-input" id="ds-cp-account" inputmode="numeric" value="${s.account.id}" />
+          <input class="ds-input" id="ds-cp-account" inputmode="numeric" value="${s.account.id || ""}" placeholder="(internal)" />
         </div>
 
         <div class="ds-field">
@@ -64,7 +60,7 @@ export async function ActiveResourcesPage() {
               <th>Desired</th>
               <th>Last</th>
               <th>Updated</th>
-              <th style="width:220px;">Toggle</th>
+              <th style="width:320px;">Actions</th>
             </tr>
           </thead>
           <tbody id="ds-cp-tbody"></tbody>
@@ -79,19 +75,31 @@ export async function ActiveResourcesPage() {
   const inpPlanRds = qs("#ds-cp-plan-rds");
   const btnRefresh = qs("#ds-cp-refresh");
 
+  // keep store in sync (optional but prevents other pages seeing empty account.id)
+  inpAccount?.addEventListener("input", () => {
+    Store.setState({ account: { ...Store.getState().account, id: (inpAccount.value || "").trim() } });
+  });
+
   function persistControlInputs() {
-    const accountId = Number(inpAccount.value || 0);
     const eksPlan = inpPlanEks.value.trim() || "dev";
     const rdsPlan = inpPlanRds.value.trim() || "rds_dev";
+    Store.setState({ active: { plans: { EKS_CLUSTER: eksPlan, RDS_INSTANCE: rdsPlan } } });
+  }
 
-    Storage.set("deepsleep.account_id", String(accountId || ""));
-    Store.setState({ account: { id: accountId }, active: { plans: { EKS_CLUSTER: eksPlan, RDS_INSTANCE: rdsPlan } } });
+  function getAccountId() {
+    const fromInput = (qs("#ds-cp-account")?.value || "").trim();
+    return fromInput || Store.getState().account.id;
   }
 
   async function loadActiveInitial() {
     persistControlInputs();
-    const accountId = Store.getState().account.id;
-    if (!accountId) return toast("Control Panel", "Missing account_id.");
+    const accountId = getAccountId();
+    if (!accountId) {
+      status.textContent = "Missing account_id.";
+      toast("Setup", "Missing account_id. Backend should provide it in token claims.");
+      location.hash = "#/login";
+      return;
+    }
 
     status.textContent = "Loading…";
     try {
@@ -150,11 +158,23 @@ export async function ActiveResourcesPage() {
     bindActiveRowActions();
   }
 
+  function removeRow(key) {
+    const tr = document.querySelector(`tr[data-key="${key.replaceAll('"','\\"')}"]`);
+    if (tr) tr.remove();
+    Store.getState().active.rowsByKey.delete(key);
+  }
+
   function bindActiveRowActions() {
-    qsa('[data-action="sleep"], [data-action="wake"]').forEach((btn) => {
+    qsa('[data-action="sleep"], [data-action="wake"], [data-action="unregister"]').forEach((btn) => {
       btn.addEventListener("click", async () => {
         persistControlInputs();
-        const accountId = Store.getState().account.id;
+        const accountId = getAccountId();
+        if (!accountId) {
+          toast("Setup", "Missing account_id.");
+          location.hash = "#/login";
+          return;
+        }
+
         const key = btn.dataset.key;
         const row = Store.getState().active.rowsByKey.get(key);
         if (!row) return;
@@ -164,13 +184,25 @@ export async function ActiveResourcesPage() {
         const ok = await confirmModal({
           title: `${action.toUpperCase()} ${row.resource_type}`,
           body: `<div class="ds-mono-muted">${row.resource_name} • ${row.region}</div>`,
-          confirmText: action === "sleep" ? "Sleep" : "Wake",
+          confirmText: action === "sleep" ? "Sleep" : (action === "wake" ? "Wake" : "Unregister"),
           cancelText: "Cancel",
         });
         if (!ok) return;
 
         try {
           btn.disabled = true;
+
+          if (action === "unregister") {
+            if (row.resource_type === "EKS_CLUSTER") {
+              await Api.unregisterEKS(accountId, row.resource_name, row.region);
+            } else if (row.resource_type === "RDS_INSTANCE") {
+              await Api.unregisterRDS(accountId, row.resource_name, row.region);
+            }
+            toast("Registry", "Unregistered.");
+            removeRow(key);
+            status.textContent = `OK — ${Store.getState().active.rowsByKey.size} registered resource(s).`;
+            return;
+          }
 
           if (row.resource_type === "EKS_CLUSTER") {
             if (action === "sleep") await Api.sleepEKS(accountId, row.resource_name, row.region, Store.getState().active.plans.EKS_CLUSTER);
@@ -182,7 +214,7 @@ export async function ActiveResourcesPage() {
 
           toast("Orchestrator", "Run submitted. Polling will update state.");
         } catch (e) {
-          toast("Orchestrator", e.message || "Action failed");
+          toast("Action", e.message || "Action failed");
         } finally {
           btn.disabled = false;
         }
@@ -191,7 +223,6 @@ export async function ActiveResourcesPage() {
   }
 
   btnRefresh.addEventListener("click", loadActiveInitial);
-  inpAccount.addEventListener("change", loadActiveInitial);
 
   await loadActiveInitial();
 }

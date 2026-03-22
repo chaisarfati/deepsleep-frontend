@@ -45,7 +45,6 @@ function csvToList(v) {
 }
 
 function kvCsvToDict(v) {
-  // "k=v,env=dev" => {k:"v", env:"dev"}
   const out = {};
   const parts = csvToList(v);
   for (const p of parts) {
@@ -181,13 +180,10 @@ function renderSelectorEditor(type, sel) {
 function readSelectorFromDom(type) {
   const include_names = csvToList(qs(`#ds-sel-${type}-include-names`)?.value);
   const exclude_names = csvToList(qs(`#ds-sel-${type}-exclude-names`)?.value);
-
   const include_labels = kvCsvToDict(qs(`#ds-sel-${type}-include-labels`)?.value);
   const exclude_labels = kvCsvToDict(qs(`#ds-sel-${type}-exclude-labels`)?.value);
-
   const include_namespaces_raw = qs(`#ds-sel-${type}-include-ns`)?.value;
   const include_namespaces = String(include_namespaces_raw || "").trim() ? csvToList(include_namespaces_raw) : null;
-
   const exclude_namespaces = csvToList(qs(`#ds-sel-${type}-exclude-ns`)?.value);
 
   const out = {
@@ -199,7 +195,6 @@ function readSelectorFromDom(type) {
     exclude_namespaces,
   };
 
-  // If completely empty, return null so we can omit it from payload
   const hasAny =
     (out.include_names && out.include_names.length) ||
     out.exclude_names.length ||
@@ -249,7 +244,6 @@ function readEditorState() {
     end_date: w.end_date || null,
   }));
 
-  // selector_by_type
   const selector_by_type = {};
   for (const t of resource_types) {
     const sel = readSelectorFromDom(t);
@@ -263,7 +257,7 @@ function readEditorState() {
     search: {
       resource_types,
       regions,
-      only_registered: true,      // strict registered-only
+      only_registered: true,
       selector_by_type,
     },
     windows: normalizedWindows,
@@ -413,7 +407,6 @@ export async function TimePoliciesPage() {
               </div>
 
               <div style="height:12px"></div>
-
               <div id="ds-selector-container"></div>
             </div>
 
@@ -429,7 +422,6 @@ export async function TimePoliciesPage() {
                   <button class="ds-btn ds-btn--wake" id="ds-win-add" type="button">Add Window</button>
                 </div>
               </div>
-
               <div id="ds-win-container"></div>
             </div>
 
@@ -451,10 +443,8 @@ export async function TimePoliciesPage() {
 
   const status = qs("#ds-pol-status");
   const tbody = qs("#ds-pol-tbody");
-
   const btnRefresh = qs("#ds-pol-refresh");
   const btnNew = qs("#ds-pol-new");
-
   const inpSel = qs("#ds-pol-selected-id");
   const inpName = qs("#ds-pol-name");
   const chkEnabled = qs("#ds-pol-enabled");
@@ -462,15 +452,11 @@ export async function TimePoliciesPage() {
   const chkEks = qs("#ds-pol-type-eks");
   const chkRds = qs("#ds-pol-type-rds");
   const inpRegions = qs("#ds-pol-regions");
-
   const selPlanEks = qs("#ds-pol-plan-eks");
   const selPlanRds = qs("#ds-pol-plan-rds");
-
   const selectorContainer = qs("#ds-selector-container");
-
   const winContainer = qs("#ds-win-container");
   const btnWinAdd = qs("#ds-win-add");
-
   const btnCreate = qs("#ds-pol-create");
   const btnUpdate = qs("#ds-pol-update");
   const btnDelete = qs("#ds-pol-delete");
@@ -492,7 +478,6 @@ export async function TimePoliciesPage() {
     selPlanRds.value = planNames[0];
   }
 
-  // selector buffers
   Store.setState({ policies: { ...Store.getState().policies, editorWindows: [defaultWindow()], editorSelectors: { EKS_CLUSTER: {}, RDS_INSTANCE: {} } } });
 
   function renderSelectorsFromStore() {
@@ -526,29 +511,13 @@ export async function TimePoliciesPage() {
       });
     });
 
-    qsa("[data-win-all]").forEach((b) => {
+    qsa("[data-win-all], [data-win-weekdays], [data-win-weekend]").forEach((b) => {
       b.addEventListener("click", () => {
-        const idx = Number(b.dataset.winAll);
+        const idx = Number(b.dataset.winAll ?? b.dataset.winWeekdays ?? b.dataset.winWeekend);
         const wins = [...(Store.getState().policies.editorWindows || [])];
-        wins[idx].days = [...DOW];
-        Store.setState({ policies: { ...Store.getState().policies, editorWindows: wins } });
-        renderWindows();
-      });
-    });
-    qsa("[data-win-weekdays]").forEach((b) => {
-      b.addEventListener("click", () => {
-        const idx = Number(b.dataset.winWeekdays);
-        const wins = [...(Store.getState().policies.editorWindows || [])];
-        wins[idx].days = ["MON","TUE","WED","THU","FRI"];
-        Store.setState({ policies: { ...Store.getState().policies, editorWindows: wins } });
-        renderWindows();
-      });
-    });
-    qsa("[data-win-weekend]").forEach((b) => {
-      b.addEventListener("click", () => {
-        const idx = Number(b.dataset.winWeekend);
-        const wins = [...(Store.getState().policies.editorWindows || [])];
-        wins[idx].days = ["SAT","SUN"];
+        if (b.dataset.winAll !== undefined) wins[idx].days = [...DOW];
+        else if (b.dataset.winWeekdays !== undefined) wins[idx].days = ["MON","TUE","WED","THU","FRI"];
+        else wins[idx].days = ["SAT","SUN"];
         Store.setState({ policies: { ...Store.getState().policies, editorWindows: wins } });
         renderWindows();
       });
@@ -560,42 +529,21 @@ export async function TimePoliciesPage() {
         const day = cb.dataset.day;
         const wins = [...(Store.getState().policies.editorWindows || [])];
         const set = new Set(wins[idx].days || DOW);
-        if (cb.checked) set.add(day);
-        else set.delete(day);
+        if (cb.checked) set.add(day); else set.delete(day);
         wins[idx].days = Array.from(set);
         Store.setState({ policies: { ...Store.getState().policies, editorWindows: wins } });
       });
     });
 
-    qsa("[data-win-start]").forEach((inp) => {
+    qsa("[data-win-start], [data-win-end], [data-win-sd], [data-win-ed]").forEach((inp) => {
       inp.addEventListener("input", () => {
-        const idx = Number(inp.dataset.winStart);
+        const idx = Number(inp.dataset.winStart ?? inp.dataset.winEnd ?? inp.dataset.winSd ?? inp.dataset.winEd);
         const wins = [...(Store.getState().policies.editorWindows || [])];
-        wins[idx].start = inp.value.trim();
-        Store.setState({ policies: { ...Store.getState().policies, editorWindows: wins } });
-      });
-    });
-    qsa("[data-win-end]").forEach((inp) => {
-      inp.addEventListener("input", () => {
-        const idx = Number(inp.dataset.winEnd);
-        const wins = [...(Store.getState().policies.editorWindows || [])];
-        wins[idx].end = inp.value.trim();
-        Store.setState({ policies: { ...Store.getState().policies, editorWindows: wins } });
-      });
-    });
-    qsa("[data-win-sd]").forEach((inp) => {
-      inp.addEventListener("input", () => {
-        const idx = Number(inp.dataset.winSd);
-        const wins = [...(Store.getState().policies.editorWindows || [])];
-        wins[idx].start_date = inp.value.trim() || null;
-        Store.setState({ policies: { ...Store.getState().policies, editorWindows: wins } });
-      });
-    });
-    qsa("[data-win-ed]").forEach((inp) => {
-      inp.addEventListener("input", () => {
-        const idx = Number(inp.dataset.winEd);
-        const wins = [...(Store.getState().policies.editorWindows || [])];
-        wins[idx].end_date = inp.value.trim() || null;
+        const val = inp.value.trim();
+        if (inp.dataset.winStart !== undefined) wins[idx].start = val;
+        else if (inp.dataset.winEnd !== undefined) wins[idx].end = val;
+        else if (inp.dataset.winSd !== undefined) wins[idx].start_date = val || null;
+        else wins[idx].end_date = val || null;
         Store.setState({ policies: { ...Store.getState().policies, editorWindows: wins } });
       });
     });
@@ -609,30 +557,15 @@ export async function TimePoliciesPage() {
   });
 
   function resetEditor() {
-    inpSel.value = "";
-    inpName.value = "";
-    chkEnabled.checked = true;
-    inpTz.value = "UTC";
-    chkEks.checked = true;
-    chkRds.checked = true;
-    inpRegions.value = "";
-
-    Store.setState({
-      policies: {
-        ...Store.getState().policies,
-        editorWindows: [defaultWindow()],
-        editorSelectors: { EKS_CLUSTER: {}, RDS_INSTANCE: {} },
-      },
-    });
-
-    renderSelectorsFromStore();
-    renderWindows();
+    inpSel.value = ""; inpName.value = ""; chkEnabled.checked = true; inpTz.value = "UTC";
+    chkEks.checked = true; chkRds.checked = true; inpRegions.value = "";
+    Store.setState({ policies: { ...Store.getState().policies, editorWindows: [defaultWindow()], editorSelectors: { EKS_CLUSTER: {}, RDS_INSTANCE: {} } } });
+    renderSelectorsFromStore(); renderWindows();
   }
 
   btnNew.addEventListener("click", resetEditor);
 
   function bindSelectorInputs() {
-    // any selector input change => keep store in sync (optional but useful)
     qsa('#ds-selector-container input').forEach((inp) => {
       inp.addEventListener("input", syncSelectorsFromDomToStore);
     });
@@ -657,9 +590,8 @@ export async function TimePoliciesPage() {
   function bindListActions() {
     qsa('[data-pol="select"]').forEach((b) => {
       b.addEventListener("click", () => {
-        const id = Number(b.dataset.id);
-        inpSel.value = String(id);
-        toast("Editor", `Selected policy ${id}.`);
+        inpSel.value = String(b.dataset.id);
+        toast("Editor", `Selected policy ${b.dataset.id}.`);
       });
     });
 
@@ -668,41 +600,19 @@ export async function TimePoliciesPage() {
         const id = Number(b.dataset.id);
         const p = Store.getState().policies.list.find((x) => x.id === id);
         if (!p) return;
-
         inpSel.value = String(id);
         inpName.value = p.name || "";
         chkEnabled.checked = !!p.enabled;
         inpTz.value = p.timezone || "UTC";
-
         const types = new Set((p.search?.resource_types || []));
         chkEks.checked = types.has("EKS_CLUSTER");
         chkRds.checked = types.has("RDS_INSTANCE");
-
-        const regions = p.search?.regions || null;
-        inpRegions.value = Array.isArray(regions) ? regions.join(",") : "";
-
-        const planByType = p.plan_name_by_type || {};
-        if (planByType.EKS_CLUSTER) selPlanEks.value = planByType.EKS_CLUSTER;
-        if (planByType.RDS_INSTANCE) selPlanRds.value = planByType.RDS_INSTANCE;
-
+        inpRegions.value = Array.isArray(p.search?.regions) ? p.search.regions.join(",") : "";
+        if (p.plan_name_by_type?.EKS_CLUSTER) selPlanEks.value = p.plan_name_by_type.EKS_CLUSTER;
+        if (p.plan_name_by_type?.RDS_INSTANCE) selPlanRds.value = p.plan_name_by_type.RDS_INSTANCE;
         const windows = normalizeWindows(p.windows || []);
-        Store.setState({ policies: { ...Store.getState().policies, editorWindows: windows.length ? windows : [defaultWindow()] } });
-        renderWindows();
-
-        // selectors
-        const sbt = p.search?.selector_by_type || {};
-        Store.setState({
-          policies: {
-            ...Store.getState().policies,
-            editorSelectors: {
-              EKS_CLUSTER: sbt.EKS_CLUSTER || {},
-              RDS_INSTANCE: sbt.RDS_INSTANCE || {},
-            },
-          },
-        });
-        renderSelectorsFromStore();
-        bindSelectorInputs();
-
+        Store.setState({ policies: { ...Store.getState().policies, editorWindows: windows.length ? windows : [defaultWindow()], editorSelectors: { EKS_CLUSTER: p.search?.selector_by_type?.EKS_CLUSTER || {}, RDS_INSTANCE: p.search?.selector_by_type?.RDS_INSTANCE || {} } } });
+        renderWindows(); renderSelectorsFromStore(); bindSelectorInputs();
         toast("Editor", "Loaded into editor.");
       });
     });
@@ -713,77 +623,42 @@ export async function TimePoliciesPage() {
   btnCreate.addEventListener("click", async () => {
     try {
       const s = Store.getState();
-      const body = readEditorState();
-      await Api.createPolicy(s.account.id, body);
-      toast("Time Policies", "Created.");
-      await loadList();
-    } catch (e) {
-      toast("Time Policies", e.message || "Create failed");
-    }
+      await Api.createPolicy(s.account.id, readEditorState());
+      toast("Time Policies", "Created."); await loadList();
+    } catch (e) { toast("Time Policies", e.message || "Create failed"); }
   });
 
   btnUpdate.addEventListener("click", async () => {
     try {
-      const s = Store.getState();
       const id = Number(inpSel.value || 0);
       if (!id) throw new Error("Missing selected policy ID.");
-      const body = readEditorState();
-      await Api.updatePolicy(s.account.id, id, body);
-      toast("Time Policies", "Updated.");
-      await loadList();
-    } catch (e) {
-      toast("Time Policies", e.message || "Update failed");
-    }
+      await Api.updatePolicy(Store.getState().account.id, id, readEditorState());
+      toast("Time Policies", "Updated."); await loadList();
+    } catch (e) { toast("Time Policies", e.message || "Update failed"); }
   });
 
   btnDelete.addEventListener("click", async () => {
     try {
-      const s = Store.getState();
       const id = Number(inpSel.value || 0);
       if (!id) throw new Error("Missing selected policy ID.");
-
-      const ok = await confirmModal({
-        title: "Delete Policy",
-        body: `<div class="ds-mono-muted">Policy <b>${h(String(id))}</b> will be deleted (executions too).</div>`,
-        confirmText: "Delete",
-        cancelText: "Cancel",
-      });
+      const ok = await confirmModal({ title: "Delete Policy", body: `Policy <b>${id}</b> will be deleted.`, confirmText: "Delete" });
       if (!ok) return;
-
-      await Api.deletePolicy(s.account.id, id);
-      toast("Time Policies", "Deleted.");
-      resetEditor();
-      await loadList();
-    } catch (e) {
-      toast("Time Policies", e.message || "Delete failed");
-    }
+      await Api.deletePolicy(Store.getState().account.id, id);
+      toast("Time Policies", "Deleted."); resetEditor(); await loadList();
+    } catch (e) { toast("Time Policies", e.message || "Delete failed"); }
   });
 
-  btnRunSleep.addEventListener("click", async () => {
+  const runNow = async (mode) => {
     try {
-      const s = Store.getState();
       const id = Number(inpSel.value || 0);
       if (!id) throw new Error("Missing selected policy ID.");
-      await Api.runPolicyNow(s.account.id, id, "SLEEP");
-      toast("Time Policies", "Run-now SLEEP submitted.");
-    } catch (e) {
-      toast("Time Policies", e.message || "Run-now failed");
-    }
-  });
+      await Api.runPolicyNow(Store.getState().account.id, id, mode);
+      toast("Time Policies", `Run-now ${mode} submitted.`);
+    } catch (e) { toast("Time Policies", e.message || "Run-now failed"); }
+  };
+  btnRunSleep.addEventListener("click", () => runNow("SLEEP"));
+  btnRunWake.addEventListener("click", () => runNow("WAKE"));
 
-  btnRunWake.addEventListener("click", async () => {
-    try {
-      const s = Store.getState();
-      const id = Number(inpSel.value || 0);
-      if (!id) throw new Error("Missing selected policy ID.");
-      await Api.runPolicyNow(s.account.id, id, "WAKE");
-      toast("Time Policies", "Run-now WAKE submitted.");
-    } catch (e) {
-      toast("Time Policies", e.message || "Run-now failed");
-    }
-  });
-
-  // initial render
   renderSelectorsFromStore();
   bindSelectorInputs();
   renderWindows();

@@ -34,6 +34,12 @@ export const wakeEKS = (accountId, clusterName, region) =>
     query: { region },
   });
 
+export const unregisterEKS = (accountId, clusterName, region) =>
+  request(`/accounts/${accountId}/eks-clusters/${encodeURIComponent(clusterName)}/register`, {
+    method: "DELETE",
+    query: { region },
+  });
+
 /* RDS states + orchestration */
 export const listRdsStates = (accountId) =>
   request(`/accounts/${accountId}/rds-instance-states`);
@@ -50,9 +56,18 @@ export const wakeRDS = (accountId, dbInstanceId, region) =>
     query: { region },
   });
 
+export const unregisterRDS = (accountId, dbInstanceId, region) =>
+  request(`/accounts/${accountId}/rds-instances/${encodeURIComponent(dbInstanceId)}/register`, {
+    method: "DELETE",
+    query: { region },
+  });
+
 /* Time policies */
 export const listPolicies = (accountId) =>
   request(`/accounts/${accountId}/time-policies`);
+
+export const getPolicy = (accountId, policyId) =>
+  request(`/accounts/${accountId}/time-policies/${policyId}`);
 
 export const createPolicy = (accountId, body) =>
   request(`/accounts/${accountId}/time-policies`, { method: "POST", body });

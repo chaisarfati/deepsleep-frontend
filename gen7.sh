@@ -1,3 +1,243 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${1:-.}"
+
+mkdir -p \
+  "$ROOT/js/api" \
+  "$ROOT/js/components" \
+  "$ROOT/js/pages"
+
+need() { [[ -f "$1" ]] || { echo "ERROR: missing $1"; exit 1; }; }
+
+need "$ROOT/js/api/services.js"
+need "$ROOT/js/components/ResourceRow.js"
+need "$ROOT/js/pages/ActiveResourcesPage.js"
+
+# ------------------------------------------------------------------
+# 1) js/api/services.js
+#    - add missing EKS price endpoint
+# ------------------------------------------------------------------
+cat > "$ROOT/js/api/services.js" <<'EOF'
+import { request } from "./client.js";
+
+/* Auth */
+export const login = (payload) => request("/auth/login", { method: "POST", body: payload });
+export const refresh = (payload) => request("/auth/refresh", { method: "POST", body: payload });
+
+/* Accounts */
+export const listAccounts = () => request("/accounts");
+
+/* Plan catalog / schemas */
+export const getSupportedPlans = () => request("/plans");
+export const getStepSchema = (stepType) => request(`/schemas/steps/${encodeURIComponent(stepType)}`);
+export const getPlanSchema = (planType) => request(`/schemas/plans/${encodeURIComponent(planType)}`);
+
+/* Account Config (Sleep Plans) */
+export const getAccountConfig = (accountId) =>
+  request(`/accounts/${accountId}/config`);
+
+export const putAccountConfig = (accountId, body) =>
+  request(`/accounts/${accountId}/config`, { method: "PUT", body });
+
+/* Resources */
+export const searchResources = (accountId, body) =>
+  request(`/accounts/${accountId}/resources/search`, { method: "POST", body });
+
+export const batchRegister = (accountId, body) =>
+  request(`/accounts/${accountId}/resources/batch-register`, { method: "POST", body });
+
+/* EKS states + orchestration */
+export const listClusterStates = (accountId) =>
+  request(`/accounts/${accountId}/cluster-states`);
+
+export const sleepEKS = (accountId, clusterName, region, planName) =>
+  request(`/accounts/${accountId}/eks-clusters/${encodeURIComponent(clusterName)}/sleep`, {
+    method: "POST",
+    query: { region, plan_name: planName || "dev" },
+  });
+
+export const wakeEKS = (accountId, clusterName, region) =>
+  request(`/accounts/${accountId}/eks-clusters/${encodeURIComponent(clusterName)}/wake`, {
+    method: "POST",
+    query: { region },
+  });
+
+export const unregisterEKS = (accountId, clusterName, region) =>
+  request(`/accounts/${accountId}/eks-clusters/${encodeURIComponent(clusterName)}/register`, {
+    method: "DELETE",
+    query: { region },
+  });
+
+/* EKS price / savings */
+export const getEksClusterPrice = (accountId, clusterName, region) =>
+  request(`/accounts/${accountId}/eks-clusters/${encodeURIComponent(clusterName)}/price`, {
+    method: "GET",
+    query: { region },
+  });
+
+export const getEksClusterPriceSavings = (accountId, clusterName, region) =>
+  request(`/accounts/${accountId}/eks-clusters/${encodeURIComponent(clusterName)}/price-savings`, {
+    method: "GET",
+    query: { region },
+  });
+
+/* RDS states + orchestration */
+export const listRdsStates = (accountId) =>
+  request(`/accounts/${accountId}/rds-instance-states`);
+
+export const sleepRDS = (accountId, dbInstanceId, region, planName) =>
+  request(`/accounts/${accountId}/rds-instances/${encodeURIComponent(dbInstanceId)}/sleep`, {
+    method: "POST",
+    query: { region, plan_name: planName || "rds_dev" },
+  });
+
+export const wakeRDS = (accountId, dbInstanceId, region) =>
+  request(`/accounts/${accountId}/rds-instances/${encodeURIComponent(dbInstanceId)}/wake`, {
+    method: "POST",
+    query: { region },
+  });
+
+export const unregisterRDS = (accountId, dbInstanceId, region) =>
+  request(`/accounts/${accountId}/rds-instances/${encodeURIComponent(dbInstanceId)}/register`, {
+    method: "DELETE",
+    query: { region },
+  });
+
+/* RDS price / savings */
+export const getRdsInstancePrice = (accountId, dbInstanceId, region) =>
+  request(`/accounts/${accountId}/rds-instances/${encodeURIComponent(dbInstanceId)}/price`, {
+    method: "GET",
+    query: { region },
+  });
+
+export const getRdsInstancePriceSavings = (accountId, dbInstanceId, region) =>
+  request(`/accounts/${accountId}/rds-instances/${encodeURIComponent(dbInstanceId)}/price-savings`, {
+    method: "GET",
+    query: { region },
+  });
+
+/* Account aggregated savings */
+export const getAccountPriceSavings = (accountId, body) =>
+  request(`/accounts/${accountId}/price-savings`, {
+    method: "POST",
+    body,
+  });
+
+/* Time policies */
+export const listPolicies = (accountId) =>
+  request(`/accounts/${accountId}/time-policies`);
+
+export const getPolicy = (accountId, policyId) =>
+  request(`/accounts/${accountId}/time-policies/${policyId}`);
+
+export const createPolicy = (accountId, body) =>
+  request(`/accounts/${accountId}/time-policies`, { method: "POST", body });
+
+export const updatePolicy = (accountId, policyId, body) =>
+  request(`/accounts/${accountId}/time-policies/${policyId}`, { method: "PUT", body });
+
+export const deletePolicy = (accountId, policyId) =>
+  request(`/accounts/${accountId}/time-policies/${policyId}`, { method: "DELETE" });
+
+export const runPolicyNow = (accountId, policyId, action) =>
+  request(`/accounts/${accountId}/time-policies/${policyId}/run-now`, { method: "POST", body: { action } });
+
+/* History */
+export const listRuns = (accountId, params = {}) =>
+  request(`/accounts/${accountId}/runs`, {
+    method: "GET",
+    query: params,
+  });
+
+/* Users */
+export const listUsers = () => request("/users");
+export const getUser = (userId) => request(`/users/${userId}`);
+export const createUser = (body) => request("/users", { method: "POST", body });
+export const updateUserRoles = (userId, body) => request(`/users/${userId}/roles`, { method: "PUT", body });
+export const updateUserAccounts = (userId, body) => request(`/users/${userId}/accounts`, { method: "PUT", body });
+export const deleteUser = (userId) => request(`/users/${userId}`, { method: "DELETE" });
+EOF
+
+# ------------------------------------------------------------------
+# 2) js/components/ResourceRow.js
+#    - rename columns semantics to:
+#      Cost of Compute / Savings in Compute
+#    - keep placeholders while async pricing fills later
+# ------------------------------------------------------------------
+cat > "$ROOT/js/components/ResourceRow.js" <<'EOF'
+import { escapeHtml as h } from "../utils/dom.js";
+import { renderStatePill } from "./Pills.js";
+import { fmtTime } from "../utils/time.js";
+
+function fmtMoneyPerHour(v) {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return `$${n}/hour`;
+}
+
+export function renderInventoryRow(r, checked) {
+  const labels = Object.entries(r.labels || {}).slice(0, 6).map(([k, v]) => `${k}:${v}`).join(", ");
+  const reg = r.registered ? `<span class="ds-badge ds-badge--reg">REGISTERED</span>` : `<span class="ds-badge">NO</span>`;
+  const observed = r.observed_state ? renderStatePill(r.observed_state) : `<span class="ds-mono-muted">—</span>`;
+  const hay = `${r.resource_type} ${r.resource_name} ${r.region} ${labels}`;
+
+  return `
+    <tr data-key="${h(r.key)}" data-hay="${h(hay)}">
+      <td><input type="checkbox" class="ds-inv-check" data-key="${h(r.key)}" ${checked ? "checked" : ""} /></td>
+      <td>${h(r.resource_type)}</td>
+      <td>${h(r.resource_name)}</td>
+      <td>${h(r.region)}</td>
+      <td>${reg}</td>
+      <td>${observed}</td>
+      <td class="ds-mono-muted">${h(labels || "—")}</td>
+    </tr>
+  `;
+}
+
+export function renderActiveRow(r) {
+  const observed = renderStatePill(r.observed_state, r.locked_until);
+  const desired = r.desired_state || "—";
+  const last = r.last_action_at ? `${r.last_action || "—"} @ ${fmtTime(r.last_action_at)}` : "—";
+  const updated = r.updated_at ? fmtTime(r.updated_at) : "—";
+  const hay = `${r.resource_type} ${r.resource_name} ${r.region}`;
+
+  const locked = !!(r.locked_until && new Date(r.locked_until).getTime() > Date.now());
+  const sleepDisabled = locked || String(r.observed_state || "").toUpperCase() === "SLEEPING";
+  const wakeDisabled = locked || String(r.observed_state || "").toUpperCase() === "RUNNING";
+  const unregDisabled = locked;
+
+  return `
+    <tr data-key="${h(r.key)}" data-hay="${h(hay)}">
+      <td>${h(r.resource_type)}</td>
+      <td>${h(r.resource_name)}</td>
+      <td>${h(r.region)}</td>
+      <td data-col="observed">${observed}</td>
+      <td data-col="desired">${h(desired)}</td>
+      <td data-col="compute-cost">${h(fmtMoneyPerHour(r.compute_cost_estimation))}</td>
+      <td data-col="compute-savings">${h(fmtMoneyPerHour(r.compute_savings_estimation))}</td>
+      <td data-col="last">${h(last)}</td>
+      <td data-col="updated">${h(updated)}</td>
+      <td>
+        <div class="ds-row">
+          <button class="ds-btn ds-btn--sleep" type="button" data-action="sleep" data-key="${h(r.key)}" ${sleepDisabled ? "disabled" : ""}>Sleep</button>
+          <button class="ds-btn ds-btn--wake" type="button" data-action="wake" data-key="${h(r.key)}" ${wakeDisabled ? "disabled" : ""}>Wake</button>
+          <button class="ds-btn ds-btn--danger" type="button" data-action="unregister" data-key="${h(r.key)}" ${unregDisabled ? "disabled" : ""}>Unregister</button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+EOF
+
+# ------------------------------------------------------------------
+# 3) js/pages/ActiveResourcesPage.js
+#    - render base rows first
+#    - then asynchronously fetch price + price-savings and patch only those cells
+#    - rename headers to Cost of Compute / Savings in Compute
+# ------------------------------------------------------------------
+cat > "$ROOT/js/pages/ActiveResourcesPage.js" <<'EOF'
 import { Store } from "../store.js";
 import { toast, confirmModal } from "../utils/toast.js";
 import { qs, qsa, escapeHtml as h } from "../utils/dom.js";
@@ -337,3 +577,9 @@ export async function ActiveResourcesPage() {
 
   await loadActiveInitial();
 }
+EOF
+
+echo "OK: rewrote js/api/services.js"
+echo "OK: rewrote js/components/ResourceRow.js"
+echo "OK: rewrote js/pages/ActiveResourcesPage.js"
+echo "Done."

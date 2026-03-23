@@ -16,6 +16,9 @@ import { InventoryPage } from "./js/pages/InventoryPage.js";
 import { ActiveResourcesPage } from "./js/pages/ActiveResourcesPage.js";
 import { TimePoliciesPage } from "./js/pages/TimePoliciesPage.js";
 import { SleepPlansPage } from "./js/pages/SleepPlansPage.js";
+import { HistoryPage } from "./js/pages/HistoryPage.js";
+import { ManageUsersPage } from "./js/pages/ManageUsersPage.js";
+import { SavingsPage } from "./js/pages/SavingsPage.js";
 
 import * as Api from "./js/api/services.js";
 
@@ -48,6 +51,14 @@ router.register("discovery", async () => InventoryPage());
 router.register("active", async () => ActiveResourcesPage());
 router.register("policies", async () => TimePoliciesPage());
 router.register("settings", async () => SleepPlansPage());
+router.register("history", async () => HistoryPage());
+router.register("users", async () => ManageUsersPage());
+router.register("savings", async () => SavingsPage());
+
+async function rerenderSidebar() {
+  const rail = qs("#ds-rail");
+  if (rail) rail.innerHTML = renderSidebar();
+}
 
 async function initialRoute(route) {
   const s = Store.getState();
@@ -67,6 +78,8 @@ async function initialRoute(route) {
     await loadAccountsIntoDropdown();
   }
 
+  await rerenderSidebar();
+
   Store.setState({ route });
   setActiveNav(route.name);
   router.render(route);
@@ -79,9 +92,7 @@ router.start((route) => {
   initialRoute(route);
 });
 
-/* ---------- Polling (10s) ----------
-   Fetch /accounts/{id}/cluster-states and patch only changed rows.
-*/
+/* ---------- Polling ---------- */
 const poller = createPoller({
   intervalMs: 10_000,
   guard: () => {

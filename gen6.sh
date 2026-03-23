@@ -34,9 +34,9 @@ export const refresh = (payload) => request("/auth/refresh", { method: "POST", b
 export const listAccounts = () => request("/accounts");
 
 /* Plan catalog / schemas */
-export const getSupportedPlans = () => request("/plans");
-export const getStepSchema = (stepType) => request(`/schemas/steps/${encodeURIComponent(stepType)}`);
-export const getPlanSchema = (planType) => request(`/schemas/plans/${encodeURIComponent(planType)}`);
+export const getSupportedPlans = () => request("api/v1/plans");
+export const getStepSchema = (stepType) => request(`api/v1/schemas/steps/${encodeURIComponent(stepType)}`);
+export const getPlanSchema = (planType) => request(`api/v1/schemas/plans/${encodeURIComponent(planType)}`);
 
 /* Account Config (Sleep Plans) */
 export const getAccountConfig = (accountId) =>

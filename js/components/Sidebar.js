@@ -1,4 +1,12 @@
+import { Store } from "../store.js";
+
+function isAdmin() {
+  return (Store.getState().auth.roles || []).includes("ADMIN");
+}
+
 export function renderSidebar() {
+  const admin = isAdmin();
+
   return `
     <div class="ds-rail__brand">
       <div class="ds-brand__mark" aria-hidden="true">
@@ -52,6 +60,39 @@ export function renderSidebar() {
         </span>
         <span class="ds-navlink__label">Sleep Plans</span>
       </a>
+
+      <a class="ds-navlink" href="#/savings" data-route="savings">
+        <span class="ds-navlink__icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 18 18">
+            <path d="M3 13h12M5 11V6M9 11V4M13 11V8" fill="none" stroke="currentColor" stroke-width="1.7"/>
+          </svg>
+        </span>
+        <span class="ds-navlink__label">Savings</span>
+      </a>
+
+      <a class="ds-navlink" href="#/history" data-route="history">
+        <span class="ds-navlink__icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 18 18">
+            <path d="M9 3v6l4 2" fill="none" stroke="currentColor" stroke-width="1.7"/>
+            <circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+          </svg>
+        </span>
+        <span class="ds-navlink__label">History</span>
+      </a>
+
+      ${admin ? `
+      <a class="ds-navlink" href="#/users" data-route="users">
+        <span class="ds-navlink__icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 18 18">
+            <circle cx="6" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <circle cx="12" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M2.8 14c.8-1.8 2.2-2.8 4.2-2.8s3.4 1 4.2 2.8" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8.8 14c.7-1.5 1.8-2.3 3.2-2.3 1.4 0 2.5.8 3.2 2.3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </span>
+        <span class="ds-navlink__label">Manage Users</span>
+      </a>
+      ` : ""}
     </nav>
 
     <div class="ds-rail__foot">

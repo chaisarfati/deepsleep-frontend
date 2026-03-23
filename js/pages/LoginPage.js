@@ -6,6 +6,18 @@ import { renderPanel } from "../components/Panel.js";
 import * as Api from "../api/services.js";
 import { renderUserInfo } from "../components/UserDropdown.js";
 
+function decodeJwtPayload(token) {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
 export async function LoginPage() {
   const s = Store.getState();
   const page = qs("#ds-page");
@@ -60,13 +72,22 @@ export async function LoginPage() {
       const token = resp?.token;
       if (!token) throw new Error("No token returned.");
 
+      const jwt = decodeJwtPayload(token) || {};
+      const roles = Array.isArray(jwt.roles) ? jwt.roles : [];
+      const businessId = String(jwt.business_id || payload.business_id || "");
+
       Storage.set("deepsleep.token", token);
       Storage.set("deepsleep.email", payload.email);
-      Storage.set("deepsleep.business_id", payload.business_id);
+      Storage.set("deepsleep.business_id", businessId);
+      Storage.set("deepsleep.roles", roles.join(","));
 
-      // account is now loaded from GET /accounts in dropdown logic
       Store.setState({
-        auth: { token, email: payload.email, business_id: payload.business_id },
+        auth: {
+          token,
+          email: payload.email,
+          business_id: businessId,
+          roles,
+        },
         account: { id: 0, aws_account_id: "" },
         accounts: { list: [], loaded: false },
       });
@@ -85,9 +106,10 @@ export async function LoginPage() {
     Storage.del("deepsleep.token");
     Storage.del("deepsleep.account_id");
     Storage.del("deepsleep.aws_account_id");
+    Storage.del("deepsleep.roles");
 
     Store.setState({
-      auth: { token: "" },
+      auth: { token: "", roles: [] },
       account: { id: 0, aws_account_id: "" },
       accounts: { list: [], loaded: false },
     });

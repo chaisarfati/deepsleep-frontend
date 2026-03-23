@@ -2,6 +2,13 @@ import { escapeHtml as h } from "../utils/dom.js";
 import { renderStatePill } from "./Pills.js";
 import { fmtTime } from "../utils/time.js";
 
+function fmtMoneyPerHour(v) {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return `$${n}/hour`;
+}
+
 export function renderInventoryRow(r, checked) {
   const labels = Object.entries(r.labels || {}).slice(0, 6).map(([k, v]) => `${k}:${v}`).join(", ");
   const reg = r.registered ? `<span class="ds-badge ds-badge--reg">REGISTERED</span>` : `<span class="ds-badge">NO</span>`;
@@ -31,7 +38,7 @@ export function renderActiveRow(r) {
   const locked = !!(r.locked_until && new Date(r.locked_until).getTime() > Date.now());
   const sleepDisabled = locked || String(r.observed_state || "").toUpperCase() === "SLEEPING";
   const wakeDisabled = locked || String(r.observed_state || "").toUpperCase() === "RUNNING";
-  const unregDisabled = locked; // backend may also refuse if sleeping; we let backend validate
+  const unregDisabled = locked;
 
   return `
     <tr data-key="${h(r.key)}" data-hay="${h(hay)}">
@@ -40,6 +47,8 @@ export function renderActiveRow(r) {
       <td>${h(r.region)}</td>
       <td data-col="observed">${observed}</td>
       <td data-col="desired">${h(desired)}</td>
+      <td data-col="compute-cost">${h(fmtMoneyPerHour(r.compute_cost_estimation))}</td>
+      <td data-col="compute-savings">${h(fmtMoneyPerHour(r.compute_savings_estimation))}</td>
       <td data-col="last">${h(last)}</td>
       <td data-col="updated">${h(updated)}</td>
       <td>

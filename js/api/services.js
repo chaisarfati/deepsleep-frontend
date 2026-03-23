@@ -8,9 +8,9 @@ export const refresh = (payload) => request("/auth/refresh", { method: "POST", b
 export const listAccounts = () => request("/accounts");
 
 /* Plan catalog / schemas */
-export const getSupportedPlans = () => request("api/v1/plans");
-export const getStepSchema = (stepType) => request(`api/v1/schemas/steps/${encodeURIComponent(stepType)}`);
-export const getPlanSchema = (planType) => request(`api/v1/schemas/plans/${encodeURIComponent(planType)}`);
+export const getSupportedPlans = () => request("/plans");
+export const getStepSchema = (stepType) => request(`/schemas/steps/${encodeURIComponent(stepType)}`);
+export const getPlanSchema = (planType) => request(`/schemas/plans/${encodeURIComponent(planType)}`);
 
 /* Account Config (Sleep Plans) */
 export const getAccountConfig = (accountId) =>
@@ -48,6 +48,19 @@ export const unregisterEKS = (accountId, clusterName, region) =>
     query: { region },
   });
 
+/* EKS price / savings */
+export const getEksClusterPrice = (accountId, clusterName, region) =>
+  request(`/accounts/${accountId}/eks-clusters/${encodeURIComponent(clusterName)}/price`, {
+    method: "GET",
+    query: { region },
+  });
+
+export const getEksClusterPriceSavings = (accountId, clusterName, region) =>
+  request(`/accounts/${accountId}/eks-clusters/${encodeURIComponent(clusterName)}/price-savings`, {
+    method: "GET",
+    query: { region },
+  });
+
 /* RDS states + orchestration */
 export const listRdsStates = (accountId) =>
   request(`/accounts/${accountId}/rds-instance-states`);
@@ -70,6 +83,26 @@ export const unregisterRDS = (accountId, dbInstanceId, region) =>
     query: { region },
   });
 
+/* RDS price / savings */
+export const getRdsInstancePrice = (accountId, dbInstanceId, region) =>
+  request(`/accounts/${accountId}/rds-instances/${encodeURIComponent(dbInstanceId)}/price`, {
+    method: "GET",
+    query: { region },
+  });
+
+export const getRdsInstancePriceSavings = (accountId, dbInstanceId, region) =>
+  request(`/accounts/${accountId}/rds-instances/${encodeURIComponent(dbInstanceId)}/price-savings`, {
+    method: "GET",
+    query: { region },
+  });
+
+/* Account aggregated savings */
+export const getAccountPriceSavings = (accountId, body) =>
+  request(`/accounts/${accountId}/price-savings`, {
+    method: "POST",
+    body,
+  });
+
 /* Time policies */
 export const listPolicies = (accountId) =>
   request(`/accounts/${accountId}/time-policies`);
@@ -88,3 +121,18 @@ export const deletePolicy = (accountId, policyId) =>
 
 export const runPolicyNow = (accountId, policyId, action) =>
   request(`/accounts/${accountId}/time-policies/${policyId}/run-now`, { method: "POST", body: { action } });
+
+/* History */
+export const listRuns = (accountId, params = {}) =>
+  request(`/accounts/${accountId}/runs`, {
+    method: "GET",
+    query: params,
+  });
+
+/* Users */
+export const listUsers = () => request("/users");
+export const getUser = (userId) => request(`/users/${userId}`);
+export const createUser = (body) => request("/users", { method: "POST", body });
+export const updateUserRoles = (userId, body) => request(`/users/${userId}/roles`, { method: "PUT", body });
+export const updateUserAccounts = (userId, body) => request(`/users/${userId}/accounts`, { method: "PUT", body });
+export const deleteUser = (userId) => request(`/users/${userId}`, { method: "DELETE" });

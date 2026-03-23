@@ -19,13 +19,13 @@ const state = {
   },
 
   accounts: {
-    list: [], // [{id, name, aws_account_id}]
+    list: [],
     loaded: false,
   },
 
   plansCatalog: {
-    supported: {},      // GET api/v1/plans
-    planSchemas: {},    // GET api/v1/schemas/plans/{plan_type}
+    supported: {},
+    planSchemas: {},
   },
 
   discovery: {
@@ -53,10 +53,15 @@ const state = {
     selectedId: null,
     loading: false,
     editorWindows: [],
-    editorSelectors: {
-      EKS_CLUSTER: {},
-      RDS_INSTANCE: {},
-    },
+    editorCriteria: [],
+  },
+
+  history: {
+    runs: [],
+  },
+
+  users: {
+    list: [],
   },
 };
 

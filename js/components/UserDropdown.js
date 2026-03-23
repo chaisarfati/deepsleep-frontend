@@ -56,7 +56,6 @@ export function bindUserDropdown() {
   const userchip = qs("#ds-userchip");
   const dropdown = qs("#ds-user-dropdown");
   const logout = qs("#ds-logout-btn");
-  const switcher = qs("#ds-account-switch");
 
   if (!userchip || !dropdown) return;
 
@@ -66,6 +65,31 @@ export function bindUserDropdown() {
     dropdown.hidden = expanded;
     if (!expanded) {
       await loadAccountsIntoDropdown();
+
+      const switcher = qs("#ds-account-switch");
+      if (switcher && !switcher.dataset.bound) {
+        switcher.dataset.bound = "1";
+        switcher.addEventListener("change", () => {
+          const id = Number(switcher.value || 0);
+          const account = (Store.getState().accounts.list || []).find((x) => Number(x.id) === id);
+          if (!account) return;
+
+          Storage.set("deepsleep.account_id", String(account.id));
+          Storage.set("deepsleep.aws_account_id", account.aws_account_id || "");
+
+          Store.setState({
+            account: {
+              id: account.id,
+              aws_account_id: account.aws_account_id || "",
+              name: account.name || "—",
+            },
+          });
+
+          renderUserInfo();
+          toast("Account", `Switched to ${account.aws_account_id}`);
+          rerenderCurrentRoute();
+        });
+      }
     }
   });
 
@@ -76,29 +100,6 @@ export function bindUserDropdown() {
       dropdown.hidden = true;
     }
   });
-
-  if (switcher) {
-    switcher.addEventListener("change", () => {
-      const id = Number(switcher.value || 0);
-      const account = (Store.getState().accounts.list || []).find((x) => Number(x.id) === id);
-      if (!account) return;
-
-      Storage.set("deepsleep.account_id", String(account.id));
-      Storage.set("deepsleep.aws_account_id", account.aws_account_id || "");
-
-      Store.setState({
-        account: {
-          id: account.id,
-          aws_account_id: account.aws_account_id || "",
-          name: account.name || "—",
-        },
-      });
-
-      renderUserInfo();
-      toast("Account", `Switched to ${account.aws_account_id}`);
-      rerenderCurrentRoute();
-    });
-  }
 
   if (logout) {
     logout.addEventListener("click", () => {

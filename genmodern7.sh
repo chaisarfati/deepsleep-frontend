@@ -1,3 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${1:-.}"
+
+need() { [[ -f "$1" ]] || { echo "ERROR: missing $1"; exit 1; }; }
+
+need "$ROOT/app.js"
+need "$ROOT/css/main.css"
+
+# ------------------------------------------------------------------
+# 1) app.js
+#    - do not block route rendering if account dropdown load fails
+# ------------------------------------------------------------------
+cat > "$ROOT/app.js" <<'EOF'
 import { Store } from "./js/store.js";
 import { createRouter } from "./js/utils/router.js";
 import { createPoller } from "./js/utils/poller.js";
@@ -186,7 +201,7 @@ window.addEventListener("hashchange", () => {
 });
 
 const poller = createPoller({
-  intervalMs: 300000,
+  intervalMs: 10000,
   guard: () => {
     const s = Store.getState();
     return !!(s.account.id && s.auth.token && s.route.name === "active" && !isTokenExpired(s.auth.token));
@@ -250,3 +265,45 @@ const poller = createPoller({
 });
 
 poller.start();
+EOF
+
+# ------------------------------------------------------------------
+# 2) css/main.css
+#    - take modal/toast hosts out of layout flow
+# ------------------------------------------------------------------
+python3 - "$ROOT/css/main.css" <<'PY'
+from pathlib import Path
+import sys
+
+p = Path(sys.argv[1])
+txt = p.read_text(encoding="utf-8")
+
+block = """
+.ds-toaststack,
+.ds-modalhost {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 120;
+}
+
+.ds-toaststack:empty,
+.ds-modalhost:empty {
+  display: none;
+}
+
+.ds-toaststack > *,
+.ds-modalhost > * {
+  pointer-events: auto;
+}
+""".strip()
+
+if ".ds-toaststack," not in txt and ".ds-modalhost" not in txt:
+    txt += "\n\n" + block + "\n"
+
+p.write_text(txt, encoding="utf-8")
+PY
+
+echo "OK: rewrote app.js"
+echo "OK: patched css/main.css"
+echo "Done."

@@ -554,3 +554,22 @@ body {
     padding: 22px;
   }
 }
+
+
+.ds-toaststack,
+.ds-modalhost {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 120;
+}
+
+.ds-toaststack:empty,
+.ds-modalhost:empty {
+  display: none;
+}
+
+.ds-toaststack > *,
+.ds-modalhost > * {
+  pointer-events: auto;
+}

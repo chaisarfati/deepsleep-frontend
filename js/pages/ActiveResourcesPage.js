@@ -6,10 +6,18 @@ import { applyTableFilter } from "../components/TableFilters.js";
 import { renderActiveRow } from "../components/ResourceRow.js";
 import * as Api from "../api/services.js";
 
+const PRICING_TTL_MS = 60 * 60 * 1000;
+const pricingCache = new Map();
+let activeRenderToken = 0;
+
 function sleepPlanTypeForResource(resourceType) {
   if (resourceType === "EKS_CLUSTER") return "EKS_CLUSTER_SLEEP";
   if (resourceType === "RDS_INSTANCE") return "RDS_SLEEP";
   return null;
+}
+
+function pricingKey(row) {
+  return `${row.resource_type}|${row.resource_name}|${row.region}`;
 }
 
 function fmtMoneyPerHour(v) {
@@ -17,6 +25,21 @@ function fmtMoneyPerHour(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return "—";
   return `$${n}/hour`;
+}
+
+function getCachedPricing(row) {
+  const cached = pricingCache.get(pricingKey(row));
+  if (!cached) return null;
+  if ((Date.now() - cached.ts) > PRICING_TTL_MS) return null;
+  return cached;
+}
+
+function setCachedPricing(row, cost, savings) {
+  pricingCache.set(pricingKey(row), {
+    cost,
+    savings,
+    ts: Date.now(),
+  });
 }
 
 function patchPricingCells(key, cost, savings) {
@@ -91,42 +114,87 @@ async function choosePlanForSleep(resourceType) {
   });
 }
 
-async function fetchRowPricing(row) {
+async function fetchPricingForRow(row) {
   const accountId = Store.getState().account.id;
 
-  try {
-    if (row.resource_type === "EKS_CLUSTER") {
-      const [priceResp, savingsResp] = await Promise.all([
-        Api.getEksClusterPrice(accountId, row.resource_name, row.region).catch(() => null),
-        Api.getEksClusterPriceSavings(accountId, row.resource_name, row.region).catch(() => null),
-      ]);
+  if (row.resource_type === "EKS_CLUSTER") {
+    const priceResp = await Api.getEksClusterPrice(accountId, row.resource_name, row.region).catch(() => null);
+    let savingsResp = null;
 
-      const cost = Number(priceResp?.hourly_price);
-      const savings = Number(savingsResp?.hourly_savings);
-
-      row.compute_cost_estimation = Number.isFinite(cost) ? cost : null;
-      row.compute_savings_estimation = Number.isFinite(savings) ? savings : null;
-      patchPricingCells(row.key, row.compute_cost_estimation, row.compute_savings_estimation);
-      return;
+    if (String(row.observed_state || "").toUpperCase() === "SLEEPING") {
+      savingsResp = await Api.getEksClusterPriceSavings(accountId, row.resource_name, row.region).catch(() => null);
     }
 
-    if (row.resource_type === "RDS_INSTANCE") {
-      const [priceResp, savingsResp] = await Promise.all([
-        Api.getRdsInstancePrice(accountId, row.resource_name, row.region).catch(() => null),
-        Api.getRdsInstancePriceSavings(accountId, row.resource_name, row.region).catch(() => null),
-      ]);
+    const cost = Number(priceResp?.hourly_price);
+    const savings = Number(savingsResp?.hourly_savings);
 
-      const cost = Number(priceResp?.hourly_price);
-      const savings = Number(savingsResp?.hourly_savings);
+    return {
+      cost: Number.isFinite(cost) ? cost : null,
+      savings: Number.isFinite(savings) ? savings : null,
+    };
+  }
 
-      row.compute_cost_estimation = Number.isFinite(cost) ? cost : null;
-      row.compute_savings_estimation = Number.isFinite(savings) ? savings : null;
-      patchPricingCells(row.key, row.compute_cost_estimation, row.compute_savings_estimation);
+  if (row.resource_type === "RDS_INSTANCE") {
+    const priceResp = await Api.getRdsInstancePrice(accountId, row.resource_name, row.region).catch(() => null);
+    let savingsResp = null;
+
+    if (String(row.observed_state || "").toUpperCase() === "SLEEPING") {
+      savingsResp = await Api.getRdsInstancePriceSavings(accountId, row.resource_name, row.region).catch(() => null);
     }
-  } catch {
-    row.compute_cost_estimation = null;
-    row.compute_savings_estimation = null;
-    patchPricingCells(row.key, null, null);
+
+    const cost = Number(priceResp?.hourly_price);
+    const savings = Number(savingsResp?.hourly_savings);
+
+    return {
+      cost: Number.isFinite(cost) ? cost : null,
+      savings: Number.isFinite(savings) ? savings : null,
+    };
+  }
+
+  return { cost: null, savings: null };
+}
+
+function schedulePricingHydration(rows, renderToken) {
+  const queue = [...rows];
+  const concurrency = Math.min(4, Math.max(1, queue.length));
+
+  const worker = async () => {
+    while (queue.length) {
+      const row = queue.shift();
+      if (!row) return;
+      if (renderToken !== activeRenderToken) return;
+
+      const cached = getCachedPricing(row);
+      if (cached) {
+        row.compute_cost_estimation = cached.cost;
+        row.compute_savings_estimation = cached.savings;
+        patchPricingCells(row.key, cached.cost, cached.savings);
+        continue;
+      }
+
+      if (renderToken !== activeRenderToken) return;
+
+      try {
+        const result = await fetchPricingForRow(row);
+        row.compute_cost_estimation = result.cost;
+        row.compute_savings_estimation = result.savings;
+        setCachedPricing(row, result.cost, result.savings);
+
+        if (renderToken === activeRenderToken) {
+          patchPricingCells(row.key, result.cost, result.savings);
+        }
+      } catch {
+        row.compute_cost_estimation = null;
+        row.compute_savings_estimation = null;
+        if (renderToken === activeRenderToken) {
+          patchPricingCells(row.key, null, null);
+        }
+      }
+    }
+  };
+
+  for (let i = 0; i < concurrency; i += 1) {
+    setTimeout(() => { worker(); }, 0);
   }
 }
 
@@ -145,7 +213,7 @@ export async function ActiveResourcesPage() {
 
   page.innerHTML = renderPanel({
     title: "Control Panel",
-    sub: "Registered resources with one-click Sleep/Wake/Unregister. Polls every 10 seconds and patches only changed rows.",
+    sub: "Registered resources with one-click Sleep/Wake/Unregister.",
     bodyHtml: `
       <div class="ds-row" style="margin-bottom:12px;">
         <div class="ds-row" style="margin-left:auto;">
@@ -183,6 +251,7 @@ export async function ActiveResourcesPage() {
 
   async function loadActiveInitial() {
     const accountId = Store.getState().account.id;
+    const renderToken = ++activeRenderToken;
 
     status.textContent = "Loading…";
     try {
@@ -227,9 +296,13 @@ export async function ActiveResourcesPage() {
         });
       }
 
-      // 1) populate base info immediately
       const map = new Map();
       for (const row of rows) {
+        const cached = getCachedPricing(row);
+        if (cached) {
+          row.compute_cost_estimation = cached.cost;
+          row.compute_savings_estimation = cached.savings;
+        }
         map.set(row.key, row);
       }
 
@@ -239,10 +312,11 @@ export async function ActiveResourcesPage() {
 
       applyTableFilter('[data-table="active"]', Store.getState().ui.search);
 
-      // 2) populate pricing asynchronously afterwards
-      for (const row of rows) {
-        fetchRowPricing(row);
-      }
+      setTimeout(() => {
+        if (renderToken === activeRenderToken) {
+          schedulePricingHydration(rows, renderToken);
+        }
+      }, 0);
     } catch (e) {
       status.textContent = "Error.";
       toast("Control Panel", e.message || "Load failed");

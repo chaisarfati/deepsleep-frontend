@@ -1,6 +1,6 @@
 import { Store } from "../store.js";
 import { toast } from "../utils/toast.js";
-import { qs, escapeHtml as h } from "../utils/dom.js";
+import { qs, qsa, escapeHtml as h } from "../utils/dom.js";
 import { renderPanel } from "../components/Panel.js";
 import * as Api from "../api/services.js";
 
@@ -74,11 +74,30 @@ function renderBreakdown(data) {
   }).join("");
 }
 
+function renderSavingsTabs(current) {
+  return `
+    <div class="ds-tabs" role="tablist" aria-label="Savings resource type filter">
+      <button class="ds-tab" type="button" data-savings-tab="ALL" aria-selected="${current === "ALL" ? "true" : "false"}">All Resources</button>
+      <button class="ds-tab" type="button" data-savings-tab="EKS_CLUSTER" aria-selected="${current === "EKS_CLUSTER" ? "true" : "false"}">EKS Clusters</button>
+      <button class="ds-tab" type="button" data-savings-tab="RDS_INSTANCE" aria-selected="${current === "RDS_INSTANCE" ? "true" : "false"}">RDS Instances</button>
+    </div>
+  `;
+}
+
+function tabToResourceTypes(tab) {
+  if (tab === "EKS_CLUSTER") return ["EKS_CLUSTER"];
+  if (tab === "RDS_INSTANCE") return ["RDS_INSTANCE"];
+  return ["EKS_CLUSTER", "RDS_INSTANCE"];
+}
+
 export async function SavingsPage() {
   const page = qs("#ds-page");
   if (!page) return;
 
   qs("#ds-crumbs").textContent = "Savings";
+
+  const currentTab = Store.getState().savings?.resourceTab || "ALL";
+  Store.setState({ savings: { resourceTab: currentTab } });
 
   page.innerHTML = renderPanel({
     title: "Savings Overview",
@@ -108,18 +127,9 @@ export async function SavingsPage() {
             <input class="ds-input" id="ds-sav-region" value="eu-west-1" placeholder="eu-west-1" />
           </div>
 
-          <div class="ds-field" style="min-width:280px;">
-            <div class="ds-label">Resource Types</div>
-            <div class="ds-row" style="gap:10px;">
-              <label class="ds-badge" style="gap:10px;">
-                <input type="checkbox" id="ds-sav-eks" checked />
-                <span>EKS_CLUSTER</span>
-              </label>
-              <label class="ds-badge" style="gap:10px;">
-                <input type="checkbox" id="ds-sav-rds" checked />
-                <span>RDS_INSTANCE</span>
-              </label>
-            </div>
+          <div class="ds-field" style="min-width:320px;">
+            <div class="ds-label">Resources</div>
+            <div id="ds-savings-tabs"></div>
           </div>
 
           <div class="ds-row" style="align-self:flex-end;">
@@ -137,6 +147,20 @@ export async function SavingsPage() {
 
   const summary = qs("#ds-sav-summary");
   const breakdown = qs("#ds-sav-breakdown");
+  const tabsBox = qs("#ds-savings-tabs");
+
+  function renderTabs() {
+    const current = Store.getState().savings?.resourceTab || "ALL";
+    tabsBox.innerHTML = renderSavingsTabs(current);
+
+    qsa("[data-savings-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.savingsTab;
+        Store.setState({ savings: { resourceTab: tab } });
+        renderTabs();
+      });
+    });
+  }
 
   async function loadSavings() {
     try {
@@ -144,14 +168,10 @@ export async function SavingsPage() {
       const from = qs("#ds-sav-from")?.value;
       const to = qs("#ds-sav-to")?.value;
       const region = (qs("#ds-sav-region")?.value || "").trim();
-
-      const resource_types = [];
-      if (qs("#ds-sav-eks")?.checked) resource_types.push("EKS_CLUSTER");
-      if (qs("#ds-sav-rds")?.checked) resource_types.push("RDS_INSTANCE");
+      const resource_types = tabToResourceTypes(Store.getState().savings?.resourceTab || "ALL");
 
       if (!from || !to) throw new Error("from/to are required");
       if (!region) throw new Error("region is required");
-      if (!resource_types.length) throw new Error("Select at least one resource type");
 
       const payload = {
         resource_types,
@@ -177,7 +197,7 @@ export async function SavingsPage() {
           </div>
 
           <div class="ds-row">
-            <span class="ds-badge ds-badge--reg" style="font-size:16px;padding:10px 14px;">
+            <span class="ds-badge ds-badge--success-matte" style="font-size:16px;padding:10px 14px;">
               Total: ${formatUsd(resp.total_savings)}
             </span>
             <span class="ds-badge">Region: ${h(region)}</span>
@@ -195,5 +215,6 @@ export async function SavingsPage() {
   }
 
   qs("#ds-sav-run")?.addEventListener("click", loadSavings);
+  renderTabs();
   await loadSavings();
 }

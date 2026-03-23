@@ -40,20 +40,20 @@ function renderRegionChips(regions) {
   `;
 }
 
-function renderTypeChecklist(selectedTypes) {
-  const sel = new Set(selectedTypes || []);
+function renderResourceTabs(currentKey) {
   return `
-    <div class="ds-panel" style="margin:0;padding:10px;max-height:92px;overflow:auto;">
-      <label class="ds-badge" style="gap:10px;display:flex;align-items:center;margin-bottom:8px;">
-        <input type="checkbox" class="ds-type-check" value="EKS_CLUSTER" ${sel.has("EKS_CLUSTER") ? "checked" : ""} />
-        <span>EKS_CLUSTER</span>
-      </label>
-      <label class="ds-badge" style="gap:10px;display:flex;align-items:center;">
-        <input type="checkbox" class="ds-type-check" value="RDS_INSTANCE" ${sel.has("RDS_INSTANCE") ? "checked" : ""} />
-        <span>RDS_INSTANCE</span>
-      </label>
+    <div class="ds-tabs" role="tablist" aria-label="Resource type filter">
+      <button class="ds-tab" type="button" data-resource-tab="ALL" aria-selected="${currentKey === "ALL" ? "true" : "false"}">All Resources</button>
+      <button class="ds-tab" type="button" data-resource-tab="EKS_CLUSTER" aria-selected="${currentKey === "EKS_CLUSTER" ? "true" : "false"}">EKS Clusters</button>
+      <button class="ds-tab" type="button" data-resource-tab="RDS_INSTANCE" aria-selected="${currentKey === "RDS_INSTANCE" ? "true" : "false"}">RDS Instances</button>
     </div>
   `;
+}
+
+function tabKeyToTypes(tabKey) {
+  if (tabKey === "EKS_CLUSTER") return ["EKS_CLUSTER"];
+  if (tabKey === "RDS_INSTANCE") return ["RDS_INSTANCE"];
+  return ["EKS_CLUSTER", "RDS_INSTANCE"];
 }
 
 export async function InventoryPage() {
@@ -64,7 +64,15 @@ export async function InventoryPage() {
   qs("#ds-crumbs").textContent = "Discovery / Inventory";
 
   const initialRegions = uniq(csvToList(s.discovery.regionsCsv || "eu-west-1,eu-central-1,us-east-1"));
-  Store.setState({ discovery: { regionsList: initialRegions } });
+  const currentTab = Store.getState().discovery.resourceTab || "ALL";
+
+  Store.setState({
+    discovery: {
+      regionsList: initialRegions,
+      resourceTab: currentTab,
+      resourceTypes: tabKeyToTypes(currentTab),
+    },
+  });
 
   page.innerHTML = renderPanel({
     title: "Inventory",
@@ -81,9 +89,9 @@ export async function InventoryPage() {
           <div id="ds-region-chips"></div>
         </div>
 
-        <div class="ds-field" style="min-width:240px;">
-          <div class="ds-label">Resource Types</div>
-          <div id="ds-types-box"></div>
+        <div class="ds-field" style="min-width:320px;">
+          <div class="ds-label">Resources</div>
+          <div id="ds-resource-tabs"></div>
         </div>
 
         <div class="ds-row" style="margin-left:auto;align-self:flex-end;">
@@ -123,7 +131,7 @@ export async function InventoryPage() {
   const regionInput = qs("#ds-region-input");
   const regionAdd = qs("#ds-region-add");
   const chips = qs("#ds-region-chips");
-  const typesBox = qs("#ds-types-box");
+  const tabsBox = qs("#ds-resource-tabs");
 
   function renderRegions() {
     const regions = Store.getState().discovery.regionsList || [];
@@ -138,13 +146,20 @@ export async function InventoryPage() {
     });
   }
 
-  function renderTypes() {
-    const types = Store.getState().discovery.resourceTypes || ["EKS_CLUSTER", "RDS_INSTANCE"];
-    typesBox.innerHTML = renderTypeChecklist(types);
-    qsa(".ds-type-check", typesBox).forEach((cb) => {
-      cb.addEventListener("change", () => {
-        const picked = qsa(".ds-type-check", typesBox).filter((x) => x.checked).map((x) => x.value);
-        Store.setState({ discovery: { resourceTypes: picked.length ? picked : ["EKS_CLUSTER", "RDS_INSTANCE"] } });
+  function renderTabs() {
+    const current = Store.getState().discovery.resourceTab || "ALL";
+    tabsBox.innerHTML = renderResourceTabs(current);
+
+    qsa("[data-resource-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.resourceTab;
+        Store.setState({
+          discovery: {
+            resourceTab: tab,
+            resourceTypes: tabKeyToTypes(tab),
+          },
+        });
+        renderTabs();
       });
     });
   }
@@ -303,7 +318,7 @@ export async function InventoryPage() {
   btnUnreg.addEventListener("click", () => doBatch("UNREGISTER"));
 
   renderRegions();
-  renderTypes();
+  renderTabs();
 
   if (s.auth.token && s.account.id) runSearch();
 }

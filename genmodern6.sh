@@ -1,3 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${1:-.}"
+
+need() { [[ -f "$1" ]] || { echo "ERROR: missing $1"; exit 1; }; }
+
+need "$ROOT/js/components/Header.js"
+need "$ROOT/app.js"
+
+# ------------------------------------------------------------------
+# 1) js/components/Header.js
+#    - restore hidden #ds-crumbs so pages stop crashing
+# ------------------------------------------------------------------
+cat > "$ROOT/js/components/Header.js" <<'EOF'
+export function renderHeader() {
+  return `
+    <div class="ds-topbar">
+      <div id="ds-crumbs" class="ds-hidden" aria-hidden="true"></div>
+
+      <div class="ds-topbar__searchwrap">
+        <label class="ds-search" aria-label="Recherche">
+          <span class="ds-search__icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 18 18">
+              <circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12.5 12.5L16 16" fill="none" stroke="currentColor" stroke-width="1.7"/>
+            </svg>
+          </span>
+          <input
+            id="ds-global-search"
+            class="ds-search__input"
+            type="search"
+            placeholder="Filter resources by name / region / type…"
+            autocomplete="off"
+          />
+        </label>
+      </div>
+    </div>
+  `;
+}
+EOF
+
+# ------------------------------------------------------------------
+# 2) app.js
+#    - align with real HTML structure (#ds-app instead of #ds-main)
+#    - keep shell/login flow intact
+# ------------------------------------------------------------------
+cat > "$ROOT/app.js" <<'EOF'
 import { Store } from "./js/store.js";
 import { createRouter } from "./js/utils/router.js";
 import { createPoller } from "./js/utils/poller.js";
@@ -238,3 +286,8 @@ const poller = createPoller({
 });
 
 poller.start();
+EOF
+
+echo "OK: rewrote js/components/Header.js"
+echo "OK: rewrote app.js"
+echo "Done."

@@ -5,7 +5,7 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-const BACKEND_URL = "/api";
+const BACKEND_URL = "http://localhost:8000";
 
 /**
  * Same-origin client:

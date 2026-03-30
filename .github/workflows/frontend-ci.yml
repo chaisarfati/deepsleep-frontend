@@ -1,0 +1,92 @@
+name: DeepSleep Frontend CI/CD
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: deepsleep-frontend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set metadata
+        id: meta
+        shell: bash
+        run: |
+          BRANCH_NAME_SANITIZED=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | tr '_' '-' | tr '/' '-')
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          IMAGE_TAG="${BRANCH_NAME_SANITIZED}.${SHA_SHORT}"
+
+          echo "branch_name_sanitized=$BRANCH_NAME_SANITIZED" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Static file sanity checks
+        shell: bash
+        run: |
+          test -f index.html
+          test -f app.js
+          test -f js/api/client.js
+          test -d css
+          test -d js
+
+      - name: Lint nginx config by building image
+        shell: bash
+        run: |
+          docker build -t local/deepsleep-frontend:test .
+
+      - name: Configure AWS credentials
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: github.event_name != 'pull_request'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Ensure ECR repository exists
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          aws ecr describe-repositories --repository-names "${{ env.ECR_REPOSITORY }}" >/dev/null 2>&1 || \
+          aws ecr create-repository --repository-name "${{ env.ECR_REPOSITORY }}"
+
+      - name: Set up Docker Buildx
+        if: github.event_name != 'pull_request'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.branch_name_sanitized }}-latest
+
+      - name: Output image reference
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          echo "Pushed image:"
+          echo "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image_tag }}"

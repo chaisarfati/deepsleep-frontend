@@ -1,5 +1,7 @@
 import { request } from "./client.js";
 
+const API_V1_PREFIX = "/api/v1";
+
 /* Auth */
 export const login = (payload) => request("/auth/login", { method: "POST", body: payload });
 export const refresh = (payload) => request("/auth/refresh", { method: "POST", body: payload });
@@ -7,12 +9,15 @@ export const refresh = (payload) => request("/auth/refresh", { method: "POST", b
 /* Accounts */
 export const listAccounts = () => request("/accounts");
 export const createAccount = (payload) => request("/accounts", { method: "POST", body: payload });
-export const getOnboardingInstructions = () => request("/accounts/onboarding-instructions", { method: "GET" });
+export const getOnboardingInstructions = () =>
+  request(`${API_V1_PREFIX}/accounts/onboarding-instructions`, { method: "GET" });
 
 /* Plan catalog / schemas */
-export const getSupportedPlans = () => request("/plans");
-export const getStepSchema = (stepType) => request(`/schemas/steps/${encodeURIComponent(stepType)}`);
-export const getPlanSchema = (planType) => request(`/schemas/plans/${encodeURIComponent(planType)}`);
+export const getSupportedPlans = () => request(`${API_V1_PREFIX}/plans`);
+export const getStepSchema = (stepType) =>
+  request(`${API_V1_PREFIX}/schemas/steps/${encodeURIComponent(stepType)}`);
+export const getPlanSchema = (planType) =>
+  request(`${API_V1_PREFIX}/schemas/plans/${encodeURIComponent(planType)}`);
 
 /* Account Config (Sleep Plans) */
 export const getAccountConfig = (accountId) =>

@@ -19,6 +19,7 @@ import { SleepPlansPage } from "./js/pages/SleepPlansPage.js";
 import { HistoryPage } from "./js/pages/HistoryPage.js";
 import { ManageUsersPage } from "./js/pages/ManageUsersPage.js";
 import { SavingsPage } from "./js/pages/SavingsPage.js";
+import { OnboardingPage } from "./js/pages/OnboardingPage.js";
 
 import * as Api from "./js/api/services.js";
 
@@ -115,6 +116,7 @@ router.register("settings", async () => SleepPlansPage());
 router.register("history", async () => HistoryPage());
 router.register("users", async () => ManageUsersPage());
 router.register("savings", async () => SavingsPage());
+router.register("onboarding", async () => OnboardingPage());
 
 async function initialRoute(route) {
   const token = Store.getState().auth.token;
@@ -147,11 +149,36 @@ async function initialRoute(route) {
 
   showShell();
 
+  let accounts = [];
   try {
-    await loadAccountsIntoDropdown();
+    const accountsResp = await Api.listAccounts();
+    accounts = accountsResp?.accounts || accountsResp || [];
+
+    Store.setState({
+      accounts: {
+        list: Array.isArray(accounts) ? accounts : [],
+        loaded: true,
+      },
+    });
+
+    try {
+      await loadAccountsIntoDropdown();
+    } catch (e) {
+      console.error("loadAccountsIntoDropdown failed:", e);
+    }
   } catch (e) {
-    console.error("loadAccountsIntoDropdown failed:", e);
-    toast("Accounts", "Unable to load account selector. Rendering page anyway.");
+    console.error("listAccounts failed:", e);
+    toast("Accounts", "Unable to load accounts.");
+  }
+
+  if (Array.isArray(accounts) && accounts.length === 0 && route.name !== "onboarding") {
+    location.hash = "#/onboarding";
+    return;
+  }
+
+  if (Array.isArray(accounts) && accounts.length > 0 && route.name === "onboarding") {
+    location.hash = "#/discovery";
+    return;
   }
 
   Store.setState({ route });
@@ -186,7 +213,7 @@ window.addEventListener("hashchange", () => {
 });
 
 const poller = createPoller({
-  intervalMs: 300000,
+  intervalMs: 10000,
   guard: () => {
     const s = Store.getState();
     return !!(s.account.id && s.auth.token && s.route.name === "active" && !isTokenExpired(s.auth.token));

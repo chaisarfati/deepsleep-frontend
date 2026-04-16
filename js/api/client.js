@@ -5,14 +5,22 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-const BACKEND_BASE = `${window.location.origin}/api/`;
-
 /**
- * Same-origin client:
- * - Uses relative API paths like "/auth/login", "/accounts/.."
- * - Browser origin decides the host, then Nginx proxies "/api" to backend
+ * API base resolution:
+ * - Local dev: define window.__DEEPSLEEP_API_BASE__ = "http://localhost:8000"
+ * - Remote with reverse proxy: define window.__DEEPSLEEP_API_BASE__ = "/api"
+ * - Fallback: same-origin reverse proxy on "/api"
  */
-export async function request(path, { method = "GET", query = null, body = null } = {}) {
+const RAW_API_BASE = window.__DEEPSLEEP_API_BASE__ || "/api";
+const BACKEND_BASE = new URL(
+  RAW_API_BASE.endsWith("/") ? RAW_API_BASE : `${RAW_API_BASE}/`,
+  window.location.origin
+).toString();
+
+export async function request(
+  path,
+  { method = "GET", query = null, body = null } = {}
+) {
   const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
   const url = new URL(normalizedPath, BACKEND_BASE);
 
@@ -24,13 +32,18 @@ export async function request(path, { method = "GET", query = null, body = null 
     });
   }
 
+  const headers = {
+    ...authHeaders(),
+  };
+
+  if (body !== null) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(url.toString(), {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(),
-    },
-    body: body ? JSON.stringify(body) : null,
+    headers,
+    body: body !== null ? JSON.stringify(body) : null,
   });
 
   const text = await res.text();

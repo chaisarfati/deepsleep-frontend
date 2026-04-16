@@ -27,13 +27,21 @@ function uniq(arr) {
 
 function renderRegionChips(regions) {
   const list = regions || [];
-  if (!list.length) return `<div class="ds-mono-muted" style="padding:6px 0;">No regions selected.</div>`;
+  if (!list.length) {
+    return `<div class="ds-mono-muted" style="padding:6px 0;">No regions selected.</div>`;
+  }
+
   return `
     <div class="ds-row" style="gap:8px;flex-wrap:wrap;">
       ${list.map((r) => `
         <span class="ds-badge" style="gap:10px;">
           <span>${h(r)}</span>
-          <button class="ds-btn ds-btn--ghost" type="button" data-region-remove="${h(r)}" style="padding:0 6px;box-shadow:none;">x</button>
+          <button
+            class="ds-btn ds-btn--ghost"
+            type="button"
+            data-region-remove="${h(r)}"
+            style="padding:0 6px;box-shadow:none;"
+          >x</button>
         </span>
       `).join("")}
     </div>
@@ -43,9 +51,32 @@ function renderRegionChips(regions) {
 function renderResourceTabs(currentKey) {
   return `
     <div class="ds-tabs" role="tablist" aria-label="Resource type filter">
-      <button class="ds-tab" type="button" data-resource-tab="ALL" aria-selected="${currentKey === "ALL" ? "true" : "false"}">All Resources</button>
-      <button class="ds-tab" type="button" data-resource-tab="EKS_CLUSTER" aria-selected="${currentKey === "EKS_CLUSTER" ? "true" : "false"}">EKS Clusters</button>
-      <button class="ds-tab" type="button" data-resource-tab="RDS_INSTANCE" aria-selected="${currentKey === "RDS_INSTANCE" ? "true" : "false"}">RDS Instances</button>
+      <button
+        class="ds-tab"
+        type="button"
+        data-resource-tab="ALL"
+        aria-selected="${currentKey === "ALL" ? "true" : "false"}"
+      >
+        All Resources
+      </button>
+
+      <button
+        class="ds-tab"
+        type="button"
+        data-resource-tab="EKS_CLUSTER"
+        aria-selected="${currentKey === "EKS_CLUSTER" ? "true" : "false"}"
+      >
+        EKS Clusters
+      </button>
+
+      <button
+        class="ds-tab"
+        type="button"
+        data-resource-tab="RDS_INSTANCE"
+        aria-selected="${currentKey === "RDS_INSTANCE" ? "true" : "false"}"
+      >
+        RDS Instances
+      </button>
     </div>
   `;
 }
@@ -56,6 +87,35 @@ function tabKeyToTypes(tabKey) {
   return ["EKS_CLUSTER", "RDS_INSTANCE"];
 }
 
+function buildResourceKey(resource) {
+  return `${resource.resource_type}|${resource.resource_name}|${resource.region}`;
+}
+
+function normalizeInventoryResources(resources) {
+  return (resources || []).map((r) => ({
+    key: buildResourceKey(r),
+    resource_type: r.resource_type,
+    resource_name: r.resource_name,
+    region: r.region,
+    labels: r.labels || {},
+    registered: !!r.registered,
+    observed_state: r.observed_state || null,
+    desired_state: r.desired_state || null,
+  }));
+}
+
+function buildBatchHitsFromSelection(resources, selectedKeys) {
+  const selectedSet = new Set(selectedKeys || []);
+
+  return (resources || [])
+    .filter((r) => selectedSet.has(r.key))
+    .map((r) => ({
+      resource_type: r.resource_type,
+      resource_name: r.resource_name,
+      region: r.region,
+    }));
+}
+
 export async function InventoryPage() {
   const s = Store.getState();
   const page = qs("#ds-page");
@@ -63,7 +123,9 @@ export async function InventoryPage() {
 
   qs("#ds-crumbs").textContent = "Discovery / Inventory";
 
-  const initialRegions = uniq(csvToList(s.discovery.regionsCsv || "eu-west-1,eu-central-1,us-east-1"));
+  const initialRegions = uniq(
+    csvToList(s.discovery.regionsCsv || "eu-west-1,eu-central-1,us-east-1")
+  );
   const currentTab = Store.getState().discovery.resourceTab || "ALL";
 
   Store.setState({
@@ -82,7 +144,11 @@ export async function InventoryPage() {
         <div class="ds-field" style="min-width:340px;flex:1;">
           <div class="ds-label">Regions</div>
           <div class="ds-row" style="gap:10px;">
-            <input class="ds-input" id="ds-region-input" placeholder="Type a region and press Add (e.g. eu-west-1)" />
+            <input
+              class="ds-input"
+              id="ds-region-input"
+              placeholder="Type a region and press Add (e.g. eu-west-1)"
+            />
             <button class="ds-btn" id="ds-region-add" type="button">Add</button>
           </div>
           <div style="height:8px"></div>
@@ -108,7 +174,9 @@ export async function InventoryPage() {
         <table class="ds-table" aria-label="Inventory table">
           <thead>
             <tr>
-              <th style="width:42px;"><input type="checkbox" id="ds-inv-check-all" aria-label="Select all"/></th>
+              <th style="width:42px;">
+                <input type="checkbox" id="ds-inv-check-all" aria-label="Select all"/>
+              </th>
               <th>Type</th>
               <th>Name</th>
               <th>Region</th>
@@ -136,11 +204,19 @@ export async function InventoryPage() {
   function renderRegions() {
     const regions = Store.getState().discovery.regionsList || [];
     chips.innerHTML = renderRegionChips(regions);
+
     qsa("[data-region-remove]").forEach((b) => {
       b.addEventListener("click", () => {
         const r = b.dataset.regionRemove;
         const next = (Store.getState().discovery.regionsList || []).filter((x) => x !== r);
-        Store.setState({ discovery: { regionsList: next, regionsCsv: next.join(",") } });
+
+        Store.setState({
+          discovery: {
+            regionsList: next,
+            regionsCsv: next.join(","),
+          },
+        });
+
         renderRegions();
       });
     });
@@ -153,12 +229,14 @@ export async function InventoryPage() {
     qsa("[data-resource-tab]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const tab = btn.dataset.resourceTab;
+
         Store.setState({
           discovery: {
             resourceTab: tab,
             resourceTypes: tabKeyToTypes(tab),
           },
         });
+
         renderTabs();
       });
     });
@@ -167,8 +245,16 @@ export async function InventoryPage() {
   regionAdd.addEventListener("click", () => {
     const v = (regionInput.value || "").trim();
     if (!v) return;
+
     const next = uniq([...(Store.getState().discovery.regionsList || []), v]);
-    Store.setState({ discovery: { regionsList: next, regionsCsv: next.join(",") } });
+
+    Store.setState({
+      discovery: {
+        regionsList: next,
+        regionsCsv: next.join(","),
+      },
+    });
+
     regionInput.value = "";
     renderRegions();
   });
@@ -182,7 +268,7 @@ export async function InventoryPage() {
 
   function readSearchPayload() {
     const accountId = Store.getState().account.id;
-    const regions = (Store.getState().discovery.regionsList || []);
+    const regions = Store.getState().discovery.regionsList || [];
     const types = Store.getState().discovery.resourceTypes || ["EKS_CLUSTER", "RDS_INSTANCE"];
 
     const payload = {
@@ -199,49 +285,57 @@ export async function InventoryPage() {
     const tbody = qs("#ds-inv-tbody");
     const { resources, selectedKeys } = Store.getState().discovery;
 
-    tbody.innerHTML = resources.map((r) => renderInventoryRow(r, selectedKeys.has(r.key))).join("");
+    tbody.innerHTML = resources
+      .map((r) => renderInventoryRow(r, selectedKeys.has(r.key)))
+      .join("");
 
     qsa(".ds-inv-check", tbody).forEach((cb) => {
       cb.addEventListener("change", () => {
         const key = cb.dataset.key;
         const set = Store.getState().discovery.selectedKeys;
-        if (cb.checked) set.add(key); else set.delete(key);
+        if (cb.checked) set.add(key);
+        else set.delete(key);
       });
     });
 
     const checkAll = qs("#ds-inv-check-all");
     checkAll.checked = false;
+
     checkAll.addEventListener("change", () => {
       const set = Store.getState().discovery.selectedKeys;
       set.clear();
+
       qsa(".ds-inv-check", tbody).forEach((cb) => {
         cb.checked = checkAll.checked;
-        if (checkAll.checked) set.add(cb.dataset.key);
+        if (checkAll.checked) {
+          set.add(cb.dataset.key);
+        }
       });
     });
   }
 
   async function runSearch() {
     const { accountId, payload } = readSearchPayload();
-    if (!accountId) return toast("Inventory", "Choose an account from Switch Account first.");
+
+    if (!accountId) {
+      return toast("Inventory", "Choose an account from Switch Account first.");
+    }
+
     status.textContent = "Searching…";
 
     try {
       const resp = await Api.searchResources(accountId, payload);
-      const resources = (resp && resp.resources) ? resp.resources : [];
+      const resources = resp?.resources || [];
+      const norm = normalizeInventoryResources(resources);
 
-      const norm = resources.map((r) => ({
-        key: `${r.resource_type}|${r.resource_name}|${r.region}`,
-        resource_type: r.resource_type,
-        resource_name: r.resource_name,
-        region: r.region,
-        labels: r.labels || {},
-        registered: !!r.registered,
-        observed_state: r.observed_state || null,
-        desired_state: r.desired_state || null,
-      }));
+      Store.setState({
+        discovery: {
+          resources: norm,
+          selectedKeys: new Set(),
+          lastQuery: payload,
+        },
+      });
 
-      Store.setState({ discovery: { resources: norm, selectedKeys: new Set(), lastQuery: payload } });
       renderInventoryRows();
       status.textContent = `OK — ${norm.length} resource(s).`;
 
@@ -253,59 +347,55 @@ export async function InventoryPage() {
   }
 
   async function doBatch(mode) {
-    const { accountId, payload } = readSearchPayload();
-    const selected = Array.from(Store.getState().discovery.selectedKeys);
+    const accountId = Store.getState().account.id;
+    const selectedKeys = Array.from(Store.getState().discovery.selectedKeys || []);
+    const resources = Store.getState().discovery.resources || [];
 
-    if (!accountId) return toast("Batch", "Choose an account from Switch Account first.");
-    if (!selected.length) return toast("Batch", "Select at least one row.");
+    if (!accountId) {
+      return toast("Batch", "Choose an account from Switch Account first.");
+    }
+
+    if (!selectedKeys.length) {
+      return toast("Batch", "Select at least one row.");
+    }
+
+    const hits = buildBatchHitsFromSelection(resources, selectedKeys);
+
+    if (!hits.length) {
+      return toast("Batch", "No valid selected resources found.");
+    }
 
     const ok = await confirmModal({
       title: mode === "REGISTER" ? "Register selected" : "Unregister selected",
-      body: `<div class="ds-mono-muted">Selected: ${selected.length}. This will call /resources/batch-register.</div>`,
+      body: `<div class="ds-mono-muted">Selected: ${hits.length}. This will call /resources/batch-register.</div>`,
       confirmText: mode === "REGISTER" ? "Register" : "Unregister",
       cancelText: "Cancel",
     });
+
     if (!ok) return;
 
-    const byType = new Map();
-    for (const key of selected) {
-      const [t, name] = key.split("|");
-      if (!byType.has(t)) byType.set(t, []);
-      byType.get(t).push(name);
-    }
-
-    const selector_by_type = {};
-    for (const [t, names] of byType.entries()) {
-      selector_by_type[t] = {
-        include_names: names,
-        exclude_names: [],
-        include_labels: {},
-        exclude_labels: {},
-        include_namespaces: null,
-        exclude_namespaces: [],
-      };
-    }
-
     const body = {
-      search: {
-        resource_types: payload.resource_types,
-        regions: payload.regions,
-        selector_by_type,
-        only_registered: false,
-      },
+      hits,
       mode,
       dry_run: false,
     };
 
     status.textContent = `${mode}…`;
+
     try {
       const resp = await Api.batchRegister(accountId, body);
       const results = resp?.results || [];
+
       const counts = results.reduce((acc, r) => {
         acc[r.action] = (acc[r.action] || 0) + 1;
         return acc;
       }, {});
-      toast("Batch", `OK — ${Object.entries(counts).map(([k,v]) => `${k}:${v}`).join(" ") || "done"}`);
+
+      toast(
+        "Batch",
+        `OK — ${Object.entries(counts).map(([k, v]) => `${k}:${v}`).join(" ") || "done"}`
+      );
+
       await runSearch();
     } catch (e) {
       status.textContent = "Batch error.";
@@ -320,5 +410,7 @@ export async function InventoryPage() {
   renderRegions();
   renderTabs();
 
-  if (s.auth.token && s.account.id) runSearch();
+  if (s.auth.token && s.account.id) {
+    runSearch();
+  }
 }

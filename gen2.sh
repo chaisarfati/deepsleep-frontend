@@ -1,3 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${1:-.}"
+FILE="$ROOT/js/pages/OnboardingPage.js"
+
+if [[ ! -f "$FILE" ]]; then
+  echo "ERROR: missing $FILE"
+  exit 1
+fi
+
+cat > "$FILE" <<'EOF'
 import { qs } from "../utils/dom.js";
 import { toast } from "../utils/toast.js";
 import * as Api from "../api/services.js";
@@ -112,16 +124,16 @@ export async function OnboardingPage() {
       </div>
 
       <div style="padding:0 20px 20px 20px;display:grid;gap:18px;">
-        <div class="ds-badge ds-badge--accent-matte">Step 1 — Generate onboarding script</div>
+        <div class="ds-badge ds-badge--violet-matte">Step 1 — Generate onboarding script</div>
 
         <div class="ds-row">
-          <button class="ds-btn ds-btn--primary" id="ds-onboarding-load" type="button">Generate Script</button>
+          <button class="ds-btn ds-btn--wake" id="ds-onboarding-load" type="button">Generate Script</button>
           <button class="ds-btn" id="ds-onboarding-copy" type="button">Copy Script</button>
         </div>
 
         <pre id="ds-onboarding-script" style="white-space:pre-wrap;overflow:auto;padding:16px;border:1px solid #e5e5e5;border-radius:16px;background:#fbfbfb;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:12px;color:#3e3e3e;min-height:220px;"></pre>
 
-        <div class="ds-badge ds-badge--accent-matte">Step 2 — Paste the resulting values</div>
+        <div class="ds-badge ds-badge--violet-matte">Step 2 — Paste the resulting values</div>
 
         <div class="ds-row" style="align-items:flex-start;">
           <div class="ds-field" style="flex:1 1 240px;">
@@ -146,7 +158,7 @@ export async function OnboardingPage() {
         </div>
 
         <div class="ds-row">
-          <button class="ds-btn ds-btn--primary" id="ds-onboarding-create-account" type="button">Attach Account</button>
+          <button class="ds-btn ds-btn--wake" id="ds-onboarding-create-account" type="button">Attach Account</button>
         </div>
 
         <div class="ds-mono-muted" id="ds-onboarding-status">—</div>
@@ -215,3 +227,7 @@ export async function OnboardingPage() {
 
   await loadInstructions();
 }
+EOF
+
+echo "OK: rewrote $FILE"
+echo "Done."

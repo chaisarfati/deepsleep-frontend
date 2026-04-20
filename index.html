@@ -6,30 +6,31 @@
   <meta name="color-scheme" content="light" />
   <title>DeepSleep — FinOps Control Plane</title>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=Inter:wght@400;450;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
   <link rel="stylesheet" href="./css/main.css" />
   <link rel="stylesheet" href="./css/sidebar.css" />
-  <link rel="stylesheet" href="./css/header.css" />
-  <link rel="stylesheet" href="./css/inventory.css" />
+  <link rel="stylesheet" href="./css/components.css" />
 </head>
 
 <body>
-  <div class="ds-shell">
-    <!-- Left rail -->
-    <aside class="ds-rail" aria-label="Navigation principale" id="ds-rail"></aside>
+  <div class="ds-shell" id="ds-shell">
+    <!-- Left sidebar -->
+    <aside class="ds-sidebar" aria-label="Navigation principale" id="ds-sidebar"></aside>
 
-    <!-- Main column -->
-    <main class="ds-main" id="ds-app">
-      <header class="ds-topbar" role="banner" id="ds-topbar"></header>
-
+    <!-- Main content -->
+    <div class="ds-content">
       <!-- Toast + modal portal -->
       <div class="ds-toaststack" id="ds-toaststack" aria-live="polite" aria-relevant="additions"></div>
       <div class="ds-modalhost" id="ds-modalhost"></div>
 
       <!-- Routed content -->
-      <section class="ds-page" id="ds-page"></section>
-    </main>
+      <main class="ds-page" id="ds-page" role="main"></main>
+    </div>
   </div>
-  
+
   <script src="./config.js"></script>
   <script type="module" src="./app.js"></script>
 </body>

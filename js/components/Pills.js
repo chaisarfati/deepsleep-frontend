@@ -7,34 +7,34 @@ function normalizeState(value) {
 function stateMeta(state, lockedUntil) {
   if (lockedUntil && new Date(lockedUntil).getTime() > Date.now()) {
     return {
-      cls: "ds-badge--warning-matte",
+      cls: "ds-badge--warning",
       label: "LOCKED",
     };
   }
 
   if (state === "RUNNING") {
     return {
-      cls: "ds-badge--success-matte",
+      cls: "ds-badge--success",
       label: "RUNNING",
     };
   }
 
   if (state === "SLEEPING") {
     return {
-      cls: "ds-badge--violet-matte",
+      cls: "ds-badge--accent",
       label: "SLEEPING",
     };
   }
 
   if (state === "ERROR" || state === "FAILED") {
     return {
-      cls: "ds-badge--danger-matte",
+      cls: "ds-badge--danger",
       label: state || "ERROR",
     };
   }
 
   return {
-    cls: "ds-badge--violet-matte",
+    cls: "ds-badge--accent",
     label: state || "UNKNOWN",
   };
 }

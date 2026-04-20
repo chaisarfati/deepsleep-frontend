@@ -30,16 +30,24 @@ const state = {
 
   discovery: {
     lastQuery: null,
+    // Persisted results — survive navigation, only cleared on explicit Refresh
     resources: [],
     selectedKeys: new Set(),
     regionsCsv: "eu-west-1,eu-central-1,us-east-1",
     regionsList: [],
-    resourceTypes: ["EKS_CLUSTER", "RDS_INSTANCE"],
+    resourceTypes: ["EKS_CLUSTER", "RDS_INSTANCE", "EC2_INSTANCE"],
+    resourceTab: "ALL",
+    filterText: "",
+    hasLoaded: false,   // true once first search completed
   },
 
   active: {
     rowsByKey: new Map(),
     lastPollAt: null,
+    hasLoaded: false,   // true once first load completed
+    filterText: "",
+    // Pricing cache — persisted across navigation
+    pricingCache: new Map(), // key → { cost, savings, ts }
   },
 
   sleepPlans: {

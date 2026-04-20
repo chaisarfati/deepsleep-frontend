@@ -1,0 +1,395 @@
+/* ─────────────────────────────────────────────────────────────
+   Extra component styles
+   ───────────────────────────────────────────────────────────── */
+
+/* ── Crumbs / page heading bar ──────────────────────────── */
+.ds-crumbs {
+  font-size: 11px;
+  color: var(--fg-faint);
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+/* ── Resource type pill ─────────────────────────────────── */
+.ds-resource-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--r-xs);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  background: var(--stone-100);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+}
+
+.ds-resource-chip--eks {
+  background: rgba(44,107,237,.06);
+  border-color: rgba(44,107,237,.18);
+  color: var(--accent);
+}
+
+.ds-resource-chip--rds {
+  background: rgba(13,122,78,.06);
+  border-color: rgba(13,122,78,.2);
+  color: var(--success);
+}
+
+.ds-resource-chip--ec2 {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: var(--warning);
+}
+
+/* ── Onboarding step ────────────────────────────────────── */
+.ds-step {
+  display: flex;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ds-step:last-child { border-bottom: 0; }
+
+.ds-step__num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--stone-900);
+  color: var(--white);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ds-step__body {}
+
+.ds-step__title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-strong);
+  margin-bottom: 6px;
+}
+
+.ds-step__content {
+  font-size: 13px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+}
+
+/* ── Code block ─────────────────────────────────────────── */
+.ds-code {
+  background: var(--stone-900);
+  color: var(--stone-200);
+  border-radius: var(--r-md);
+  padding: 16px 18px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow: auto;
+  position: relative;
+}
+
+.ds-code__copy {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+/* ── Empty state ────────────────────────────────────────── */
+.ds-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 24px;
+  text-align: center;
+  gap: 10px;
+}
+
+.ds-empty__icon {
+  width: 40px;
+  height: 40px;
+  color: var(--stone-300);
+  margin-bottom: 4px;
+}
+
+.ds-empty__title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.ds-empty__sub {
+  font-size: 13px;
+  color: var(--fg-faint);
+  max-width: 280px;
+  line-height: 1.55;
+}
+
+/* ── Inline loading ─────────────────────────────────────── */
+.ds-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.ds-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 600ms linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Savings cards ──────────────────────────────────────── */
+.ds-savings-hero {
+  background: var(--stone-900);
+  border-radius: var(--r-xl);
+  padding: 32px;
+  color: var(--white);
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.ds-savings-hero::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, rgba(44,107,237,.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.ds-savings-hero__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--stone-400);
+  margin-bottom: 10px;
+}
+
+.ds-savings-hero__amount {
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--white);
+}
+
+.ds-savings-hero__sub {
+  font-size: 13px;
+  color: var(--stone-400);
+  margin-top: 8px;
+}
+
+/* ── Policy card ────────────────────────────────────────── */
+.ds-policy-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  transition: box-shadow var(--t-base), border-color var(--t-base);
+  margin-bottom: 8px;
+}
+
+.ds-policy-card:hover {
+  box-shadow: var(--shadow-sm);
+  border-color: var(--border-strong);
+}
+
+.ds-policy-card--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.ds-policy-card__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--stone-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+
+.ds-policy-card__body { flex: 1; min-width: 0; }
+
+.ds-policy-card__name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-strong);
+  letter-spacing: -0.01em;
+  margin-bottom: 3px;
+}
+
+.ds-policy-card__meta {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.ds-policy-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Toggle ─────────────────────────────────────────────── */
+.ds-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.ds-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.ds-toggle__track {
+  position: absolute;
+  inset: 0;
+  background: var(--stone-200);
+  border-radius: var(--r-pill);
+  transition: background var(--t-fast);
+  cursor: pointer;
+}
+
+.ds-toggle input:checked + .ds-toggle__track {
+  background: var(--accent);
+}
+
+.ds-toggle__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--t-fast);
+}
+
+.ds-toggle input:checked + .ds-toggle__track::after {
+  transform: translateX(16px);
+}
+
+/* ── Chip (region tag) ──────────────────────────────────── */
+.ds-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--stone-100);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+
+.ds-chip__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  color: var(--fg-faint);
+  cursor: pointer;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+
+.ds-chip__remove:hover {
+  color: var(--fg-strong);
+  background: var(--stone-200);
+}
+
+/* ── Action row inside table ────────────────────────────── */
+.ds-action-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── History run card ───────────────────────────────────── */
+.ds-run-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.ds-run-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ds-run-card__id {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-faint);
+}
+
+.ds-run-card__name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-strong);
+}
+
+.ds-run-card__body {
+  padding: 14px 18px;
+}
+
+.ds-run-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}

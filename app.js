@@ -184,6 +184,7 @@ const poller = createPoller({
     const accountId = s.account.id;
 
     try {
+      // Step 1: fetch states from DB (fast)
       const resp   = await Api.listResourceStates(accountId);
       const states = resp?.states || [];
 
@@ -202,24 +203,35 @@ const poller = createPoller({
           locked_until:   state.locked_until,
           updated_at:     state.updated_at,
         });
-
-        // Opportunistically fetch pricing for newly-sleeping resources if not cached
-        const cacheKey = `${state.resource_type}|${resourceName}|${state.region}`;
-        const pCache = s.active.pricingCache;
-        const existing = pCache.get(cacheKey);
-        if (!existing || (Date.now() - existing.ts) > PRICING_TTL_MS) {
-          const obs = (state.observed_state || "").toUpperCase();
-          if (obs === "SLEEPING" || obs === "STOPPED" || obs === "ASLEEP") {
-            Api.getResourceSavings(accountId, state.resource_type, resourceName, state.region)
-              .then((ps) => {
-                const savings = ps?.hourly_savings ?? ps?.savings_per_hour ?? null;
-                pCache.set(cacheKey, { cost: null, savings, ts: Date.now() });
-              }).catch(() => {});
-          }
-        }
       }
 
       Store.setState({ active: { lastPollAt: new Date().toISOString() } });
+
+      // Step 2: opportunistic batch pricing for uncached resources
+      const pCache = s.active.pricingCache;
+      const uncached = states.filter(state => {
+        const resourceName = state.resource_name ?? state.cluster_name ?? state.db_instance_id ?? state.instance_id;
+        const key = `${state.resource_type}|${resourceName}|${state.region}`;
+        const existing = pCache.get(key);
+        if (existing && (Date.now() - existing.ts) < PRICING_TTL_MS) return false;
+        const obs = (state.observed_state || "").toUpperCase();
+        return obs === "RUNNING" || obs === "AVAILABLE" || obs === "ACTIVE"
+            || obs === "SLEEPING" || obs === "STOPPED" || obs === "ASLEEP";
+      }).map(state => ({
+        resource_type:  state.resource_type,
+        resource_name:  state.resource_name ?? state.cluster_name ?? state.db_instance_id ?? state.instance_id,
+        region:         state.region,
+        observed_state: state.observed_state,
+      }));
+
+      if (uncached.length) {
+        Api.getResourcePricingBatch(accountId, uncached).then(resp => {
+          const pricing = resp?.pricing || {};
+          for (const [key, { cost, savings }] of Object.entries(pricing)) {
+            pCache.set(key, { cost, savings, ts: Date.now() });
+          }
+        }).catch(() => {});
+      }
 
     } catch (e) {
       const msg = String(e.message || "");

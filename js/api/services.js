@@ -1,6 +1,7 @@
 /**
- * DeepSleep API Services — v3 2026
- * Aligned with the standardized backend API after migration.
+ * DeepSleep API Services — v4 2026
+ * Supports: resource-states (DB-only), resource-states/verify (async),
+ * resource-pricing-batch (deduplicated batch)
  */
 
 import { request } from "./client.js";
@@ -18,66 +19,68 @@ export const createAccount = (payload) => request("/accounts", { method: "POST",
 /* ── Catalog ─────────────────────────────────────────────── */
 export const getOnboardingInstructions = () =>
   request(`${V1}/accounts/onboarding-instructions`);
-
 export const getSupportedPlans = () => request(`${V1}/plans`);
-
 export const getStepSchema = (stepType) =>
   request(`${V1}/schemas/steps/${encodeURIComponent(stepType)}`);
-
 export const getPlanSchema = (planType) =>
   request(`${V1}/schemas/plans/${encodeURIComponent(planType)}`);
 
-/* ── Account Config (Sleep Plans) ───────────────────────── */
+/* ── Account Config ──────────────────────────────────────── */
 export const getAccountConfig = (accountId) =>
   request(`/accounts/${accountId}/config`);
-
 export const putAccountConfig = (accountId, body) =>
   request(`/accounts/${accountId}/config`, { method: "PUT", body });
 
-/* ── Resource discovery ──────────────────────────────────── */
+/* ── Discovery ───────────────────────────────────────────── */
 export const searchResources = (accountId, body) =>
   request(`/accounts/${accountId}/resources/search`, { method: "POST", body });
 
-/* ── Batch register / unregister ─────────────────────────── */
+/* ── Batch register ──────────────────────────────────────── */
 export const batchRegisterResources = (accountId, body) =>
   request(`/accounts/${accountId}/resources/batch-register`, { method: "POST", body });
 
 /* ── Single register / unregister ───────────────────────── */
 export const registerResource = (accountId, body) =>
   request(`/accounts/${accountId}/resources/register`, { method: "POST", body });
-
 export const unregisterResource = (accountId, body) =>
   request(`/accounts/${accountId}/resources/unregister`, { method: "POST", body });
 
 /* ── Sleep / Wake ────────────────────────────────────────── */
 export const sleepResource = (accountId, body) =>
   request(`/accounts/${accountId}/resources/sleep`, { method: "POST", body });
-
 export const wakeResource = (accountId, body) =>
   request(`/accounts/${accountId}/resources/wake`, { method: "POST", body });
 
-/* ── Resource states (unified — replaces cluster-states, rds-instance-states, ec2-instance-states) */
+/* ── Resource states — DB only, ~instant ─────────────────── */
 export const listResourceStates = (accountId, resourceType = null) =>
   request(`/accounts/${accountId}/resource-states`, {
     query: resourceType ? { resource_type: resourceType } : {},
   });
 
-/* ── Costs ───────────────────────────────────────────────── */
-
 /**
- * Hourly price for a resource (call for RUNNING resources).
+ * Fire-and-forget existence check.
+ * Send the resource list received from listResourceStates.
+ * Returns which resources are newly DROPPED.
+ * @param {number} accountId
+ * @param {Array<{resource_type, resource_name, region}>} resources
  */
-export const getResourcePrice = (accountId, resourceType, resourceName, region) =>
-  request(`/accounts/${accountId}/resource-price`, {
-    query: { resource_type: resourceType, resource_name: resourceName, region },
+export const verifyResourceExistence = (accountId, resources) =>
+  request(`/accounts/${accountId}/resource-states/verify`, {
+    method: "POST",
+    body: { resources },
   });
 
+/* ── Batch pricing — deduplicated, single round-trip ─────── */
 /**
- * Current hourly savings rate (call ONLY when observed_state === "SLEEPING").
+ * Price a batch of resources in one call.
+ * @param {number} accountId
+ * @param {Array<{resource_type, resource_name, region, observed_state}>} resources
+ * @returns {{ pricing: Record<string, {cost: number|null, savings: number|null}> }}
  */
-export const getResourceSavings = (accountId, resourceType, resourceName, region) =>
-  request(`/accounts/${accountId}/resource-savings`, {
-    query: { resource_type: resourceType, resource_name: resourceName, region },
+export const getResourcePricingBatch = (accountId, resources) =>
+  request(`/accounts/${accountId}/resource-pricing-batch`, {
+    method: "POST",
+    body: { resources },
   });
 
 /* ── Aggregated savings window ───────────────────────────── */
@@ -92,7 +95,8 @@ export const updatePolicy  = (accountId, policyId, body)   => request(`/accounts
 export const deletePolicy  = (accountId, policyId)         => request(`/accounts/${accountId}/time-policies/${policyId}`, { method: "DELETE" });
 export const enablePolicy  = (accountId, policyId)         => request(`/accounts/${accountId}/time-policies/${policyId}/enable`, { method: "POST" });
 export const disablePolicy = (accountId, policyId)         => request(`/accounts/${accountId}/time-policies/${policyId}/disable`, { method: "POST" });
-export const runPolicyNow  = (accountId, policyId, action) => request(`/accounts/${accountId}/time-policies/${policyId}/run-now`, { method: "POST", body: { action } });
+export const runPolicyNow  = (accountId, policyId, action) =>
+  request(`/accounts/${accountId}/time-policies/${policyId}/run-now`, { method: "POST", body: { action } });
 
 /* ── History ─────────────────────────────────────────────── */
 export const listRuns = (accountId, params = {}) =>

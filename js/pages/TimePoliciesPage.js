@@ -65,13 +65,13 @@ function buildPolicyPayload(editorState) {
     if (c.plan_name) plan_name_by_type[c.resource_type] = c.plan_name;
     (c.regions || []).forEach(r => mergedRegions.add(r));
     selector_by_type[c.resource_type] = {
-      include_names: c.selector.include_names?.length ? c.selector.include_names : null,
-      exclude_names: c.selector.exclude_names || [],
-      include_labels: c.selector.include_labels || {},
-      exclude_labels: c.selector.exclude_labels || {},
-      include_namespaces: c.selector.include_namespaces?.length ? c.selector.include_namespaces : null,
-      exclude_namespaces: c.selector.exclude_namespaces || [],
-    };
+  	include_names: c.selector.include_names || [],
+  	exclude_names: c.selector.exclude_names || [],
+  	include_labels: c.selector.include_labels || {},
+  	exclude_labels: c.selector.exclude_labels || {},
+  	include_namespaces: c.selector.include_namespaces?.length ? c.selector.include_namespaces : null,
+  	exclude_namespaces: c.selector.exclude_namespaces || [],
+    };	
   }
 
   return {
@@ -243,13 +243,15 @@ function openPolicyDrawer(mode, existingPolicy, accountId, onSaved) {
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 1l10 10M11 1L1 11"/></svg>
           </button>
         </div>
-        <!-- Days -->
+        <!-- Days — direct button, no hidden checkbox wrapper (avoids double-fire) -->
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px;">
           ${DOW.map(d => `
-            <label style="cursor:pointer;">
-              <input type="checkbox" data-win-day="${idx}:${d}" ${set.has(d)?"checked":""} style="display:none;" class="ds-day-check">
-              <span class="ds-day-pill ${set.has(d)?"ds-day-pill--active":""}" data-for="${idx}:${d}">${d.slice(0,2)}</span>
-            </label>
+            <button
+              type="button"
+              class="ds-day-pill ${set.has(d)?"ds-day-pill--active":""}"
+              data-win-day="${idx}:${d}"
+              aria-pressed="${set.has(d)}"
+            >${d.slice(0,2)}</button>
           `).join("")}
         </div>
         <!-- Times -->
@@ -441,24 +443,18 @@ function openPolicyDrawer(mode, existingPolicy, accountId, onSaved) {
     });
 
     // Windows — days (visual toggle)
-    qsa(".ds-day-check", drawer).forEach(cb => {
-      cb.addEventListener("change", () => {
-        const [idxS, day] = cb.dataset.winDay.split(":");
+    // Day pills — direct button toggle, no hidden checkbox, no double-fire
+    qsa(".ds-day-pill", drawer).forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const [idxS, day] = btn.dataset.winDay.split(":");
         const idx = Number(idxS);
         const set = new Set(editorState.windows[idx].days || DOW);
-        if (cb.checked) set.add(day); else set.delete(day);
+        const isActive = btn.classList.contains("ds-day-pill--active");
+        if (isActive) { set.delete(day); btn.classList.remove("ds-day-pill--active"); btn.setAttribute("aria-pressed", "false"); }
+        else          { set.add(day);    btn.classList.add("ds-day-pill--active");    btn.setAttribute("aria-pressed", "true"); }
         editorState.windows[idx].days = Array.from(set);
-        // Update pill style without full re-render
-        const pill = qs(`[data-for="${idxS}:${day}"]`, drawer);
-        if (pill) pill.classList.toggle("ds-day-pill--active", cb.checked);
-      });
-    });
-
-    // Day pills — click forwarding
-    qsa(".ds-day-pill", drawer).forEach(pill => {
-      pill.addEventListener("click", () => {
-        const check = qs(`input[data-win-day="${pill.dataset.for}"]`, drawer);
-        if (check) { check.checked = !check.checked; check.dispatchEvent(new Event("change")); }
       });
     });
 

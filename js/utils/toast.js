@@ -1,8 +1,5 @@
 import { qs, escapeHtml } from "./dom.js";
 
-/**
- * Show a toast notification using the new design system.
- */
 export function toast(title, msg) {
   const stack = qs("#ds-toaststack");
   if (!stack) return;
@@ -26,7 +23,14 @@ export function toast(title, msg) {
 }
 
 /**
- * Confirmation modal using new design system.
+ * Confirmation modal.
+ *
+ * Bug fixed: removed { once: true } on the host listener.
+ * The old approach consumed the listener on the first click anywhere in the
+ * host (including pricing DOM patches that bubble up), making the modal
+ * unresponsive on subsequent clicks.
+ * Now we use an explicit named handler that is removed only when the modal
+ * resolves, regardless of what caused the removal.
  */
 export function confirmModal({ title, body, confirmText = "Confirm", cancelText = "Cancel", danger = false }) {
   const host = qs("#ds-modalhost");
@@ -55,17 +59,22 @@ export function confirmModal({ title, body, confirmText = "Confirm", cancelText 
     `;
     host.style.pointerEvents = "auto";
 
-    const cleanup = (val) => {
+    function cleanup(val) {
+      // Remove listener BEFORE clearing innerHTML to avoid stale references
+      host.removeEventListener("click", handler);
       host.innerHTML = "";
       host.style.pointerEvents = "none";
       resolve(val);
-    };
+    }
 
-    host.addEventListener("click", (e) => {
-      const t = e.target;
-      if (!t || !t.dataset) return;
-      if (t.dataset.backdrop || t.dataset.close || t.dataset.cancel) cleanup(false);
-      if (t.dataset.confirm) cleanup(true);
-    }, { once: true });
+    function handler(e) {
+      // Walk up to find a data-* button — handles clicks on SVG children etc.
+      const btn = e.target?.closest("[data-backdrop],[data-close],[data-cancel],[data-confirm]");
+      if (!btn) return;
+      if (btn.dataset.backdrop || btn.dataset.close || btn.dataset.cancel) cleanup(false);
+      else if (btn.dataset.confirm) cleanup(true);
+    }
+
+    host.addEventListener("click", handler);
   });
 }

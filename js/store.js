@@ -33,7 +33,7 @@ const state = {
     // Persisted results — survive navigation, only cleared on explicit Refresh
     resources: [],
     selectedKeys: new Set(),
-    regionsCsv: "eu-west-1,eu-central-1,us-east-1",
+    regionsCsv: "eu-west-1",
     regionsList: [],
     resourceTypes: ["EKS_CLUSTER", "RDS_INSTANCE", "EC2_INSTANCE"],
     resourceTab: "ALL",

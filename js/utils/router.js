@@ -4,13 +4,26 @@ export function createRouter() {
   function parseHash() {
     const raw = location.hash.replace(/^#/, "");
     const path = raw.startsWith("/") ? raw : "/discovery";
-    const [p] = path.split("?");
-    const parts = p.split("/").filter(Boolean);
+    // Strip query string
+    const [pathOnly, queryStr] = path.split("?");
+    const parts = pathOnly.split("/").filter(Boolean);
     const name = parts[0] || "discovery";
-    return { name, params: {} };
+
+    // Parse query params
+    const params = {};
+    if (queryStr) {
+      new URLSearchParams(queryStr).forEach((v, k) => { params[k] = v; });
+    }
+    // Support path segments: /resource/EKS_CLUSTER/my-cluster/eu-west-1
+    if (parts.length > 1) {
+      params._segments = parts.slice(1);
+    }
+
+    return { name, params };
   }
 
   function register(name, handler) { routes.set(name, handler); }
+
   function go(path) { location.hash = "#" + path; }
 
   function start(onRoute) {

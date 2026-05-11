@@ -54,7 +54,14 @@ export function renderInventoryRow(resource, isSelected) {
         />
       </td>
       <td><span class="${resourceChipClass(resource_type)}">${resourceTypeShort(resource_type)}</span></td>
-      <td><span class="ds-mono" style="font-size:12px;color:var(--fg-strong);">${h(resource_name)}</span></td>
+      <td>
+        <a
+          href="#/resource?type=${h(resource_type)}&name=${encodeURIComponent(resource_name)}&region=${h(region)}"
+          class="ds-mono"
+          style="font-size:12px;color:var(--fg-strong);text-decoration:none;border-bottom:1px dashed var(--border-strong);cursor:pointer;"
+          title="View resource details"
+        >${h(resource_name)}</a>
+      </td>
       <td><span class="ds-mono" style="font-size:12px;">${h(region)}</span></td>
       <td>
         ${registered
@@ -93,7 +100,7 @@ export function renderActiveRow(row, options = {}) {
     <tr data-key="${h(key)}">
       <td><span class="${resourceChipClass(resource_type)}">${resourceTypeShort(resource_type)}</span></td>
       <td>
-        <span class="ds-mono" style="font-size:12px;color:var(--fg-strong);">${h(resource_name)}</span>
+        <a href="#/resource?type=${h(resource_type)}&name=${encodeURIComponent(resource_name)}&region=${h(region)}" class="ds-mono" style="font-size:12px;color:var(--fg-strong);text-decoration:none;border-bottom:1px dashed var(--border-strong);" title="View details">${h(resource_name)}</a>
         ${lockBadge}
       </td>
       <td><span class="ds-mono" style="font-size:12px;">${h(region)}</span></td>

@@ -83,6 +83,13 @@ export const getResourcePricingBatch = (accountId, resources) =>
     body: { resources },
   });
 
+
+/* ── Single resource detail (live from provider) ────────── */
+export const getResourceDetail = (accountId, resourceType, resourceName, region) =>
+  request(`/accounts/${accountId}/resource-states/${encodeURIComponent(resourceName)}`, {
+    query: { resource_type: resourceType, region },
+  });
+
 /* ── Aggregated savings window ───────────────────────────── */
 export const getAccountPriceSavings = (accountId, body) =>
   request(`/accounts/${accountId}/price-savings`, { method: "POST", body });

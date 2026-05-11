@@ -20,6 +20,7 @@ import { HistoryPage }         from "./js/pages/HistoryPage.js";
 import { ManageUsersPage }     from "./js/pages/ManageUsersPage.js";
 import { SavingsPage }         from "./js/pages/SavingsPage.js";
 import { OnboardingPage }      from "./js/pages/OnboardingPage.js";
+import { ResourceDetailPage }  from "./js/pages/ResourceDetailPage.js";
 import { patchActiveRow }      from "./js/components/ActiveRowPatcher.js";
 
 import * as Api from "./js/api/services.js";
@@ -89,6 +90,7 @@ router.register("history",   async () => HistoryPage());
 router.register("users",     async () => ManageUsersPage());
 router.register("savings",   async () => SavingsPage());
 router.register("onboarding",async () => OnboardingPage());
+router.register("resource",   async (route) => ResourceDetailPage(route));
 
 /* ── Initial route logic ─────────────────────────────────── */
 

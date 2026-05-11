@@ -1,6 +1,7 @@
 import { qs } from "../utils/dom.js";
 import { toast } from "../utils/toast.js";
 import * as Api from "../api/services.js";
+import { Store } from "../store.js";
 
 function buildScript(data) {
   const deepsleepAccountId = data.deepsleep_account_id;
@@ -188,13 +189,19 @@ export async function OnboardingPage() {
 
   qs("#ds-onboarding-create-account").addEventListener("click", async () => {
     try {
+      const { auth } = Store.getState();
+
       const payload = {
+        business_id: auth.business_id,
         name: qs("#ds-onboarding-account-name").value.trim(),
         aws_account_id: qs("#ds-onboarding-aws-account-id").value.trim(),
         role_arn: qs("#ds-onboarding-role-arn").value.trim(),
         external_id: qs("#ds-onboarding-external-id").value.trim() || null,
       };
 
+      if (!payload.business_id) {
+        throw new Error("No business_id found in session. Please log in again.");
+      }
       if (!payload.name || !payload.aws_account_id || !payload.role_arn) {
         throw new Error("Missing account name / aws_account_id / role_arn");
       }

@@ -391,8 +391,15 @@ export async function ActiveResourcesPage() {
   // ── Action handlers ────────────────────────────────────────────────────────
   async function choosePlan(resourceType) {
     const config = await Api.getAccountConfig(accountId);
-    const wantedType = resourceType === "EKS_CLUSTER" ? "EKS_CLUSTER_SLEEP"
-                     : resourceType === "RDS_INSTANCE" ? "RDS_SLEEP" : "EC2_SLEEP";
+    const PLAN_TYPE_MAP = {
+      EKS_CLUSTER:  "EKS_CLUSTER_SLEEP",
+      RDS_INSTANCE: "RDS_SLEEP",
+      EC2_INSTANCE: "EC2_INSTANCE_SLEEP",
+    };
+
+    const wantedType = PLAN_TYPE_MAP[resourceType];
+    if (!wantedType) throw new Error(`Unknown resource type: ${resourceType}`);
+
     const plans = Object.entries(config?.sleep_plans || {})
       .filter(([, p]) => p?.plan_type === wantedType).map(([n]) => n);
     if (!plans.length) throw new Error(`No sleep plan for ${resourceType}.`);
